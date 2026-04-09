@@ -29,18 +29,22 @@ const CONFIG = {
  * ============================================================================= */
 async function ensureSecretsLoaded() {
   if (typeof window === "undefined") return;
-  if (window.TODOC_SECRETS && typeof window.TODOC_SECRETS.KAKAO_APP_KEY === "string") return;
+  if (window.TODOC_SECRETS && typeof window.TODOC_SECRETS.KAKAO_APP_KEY === "string") {
+    return { ok: Boolean(window.TODOC_SECRETS.KAKAO_APP_KEY), via: "window.TODOC_SECRETS" };
+  }
 
   try {
     const r = await fetch("/api/config", { cache: "no-store" });
-    if (!r.ok) return;
+    if (!r.ok) return { ok: false, via: `/api/config (${r.status})` };
     const data = await r.json();
     window.TODOC_SECRETS = {
       ...(window.TODOC_SECRETS || {}),
       KAKAO_APP_KEY: typeof data.KAKAO_APP_KEY === "string" ? data.KAKAO_APP_KEY : "",
     };
+    return { ok: Boolean(window.TODOC_SECRETS.KAKAO_APP_KEY), via: "/api/config (200)" };
   } catch {
     // 로컬(Go Live 등)에서는 /api/config가 없을 수 있으므로 조용히 무시
+    return { ok: false, via: "/api/config (fetch failed)" };
   }
 }
 
@@ -656,7 +660,7 @@ function initMapOnce() {
   // API 키가 없으면 목업 모드로 동작
   if (!hasKakaoKey()) {
     showMapFallback(
-      "카카오맵을 쓰려면 js/config.secrets.js에 KAKAO_APP_KEY(JavaScript 키)를 넣으세요. 지금은 목업 병원 목록만 표시됩니다."
+      "카카오맵 키를 불러오지 못했습니다. (Vercel 배포라면 Project Settings → Environment Variables에 KAKAO_APP_KEY를 등록 후 Redeploy) 지금은 목업 병원 목록만 표시됩니다."
     );
     statusEl.textContent = "데모 모드: 목업 병원 데이터";
     renderHospitalList(MOCK_VET_HOSPITALS);
@@ -906,7 +910,11 @@ function closeBookModal() {
 
 // 키를 먼저 주입한 뒤 카카오맵 초기화
 (async () => {
-  await ensureSecretsLoaded();
+  const statusEl = document.getElementById("map-status");
+  const r = await ensureSecretsLoaded();
+  if (statusEl && r && r.via) {
+    statusEl.textContent = `키 로드: ${r.via}${r.ok ? " (OK)" : " (EMPTY)"}`;
+  }
   initMapOnce();
 })();
 
