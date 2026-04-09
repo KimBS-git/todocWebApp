@@ -1,0 +1,626 @@
+/* ============================================================
+   mypage.css — 마이페이지 번들
+   base + nav + mypage + modal
+   ============================================================ */
+/* ============================================================
+   base.css — 전역 CSS 변수, 리셋, 레이아웃 뼈대
+   모든 페이지에 공통으로 적용되는 기초 스타일입니다.
+   ============================================================ */
+
+/* ─── CSS 커스텀 프로퍼티(디자인 토큰) ────────────────────────
+   :root 안에 선언해 전체 CSS 어디서나 var(--이름)으로 참조합니다.
+   색상·반경·그림자를 한 곳에서 관리해 디자인 일관성을 유지합니다. */
+:root {
+  /* 브랜드 컬러 */
+  --color-primary: #3366ff;       /* 주요 파란색 (버튼, 강조 등) */
+  --color-primary-soft: #5c76cc;  /* 살짝 흐린 파란색 (hover 보조) */
+
+  /* 배경색 계열 */
+  --color-bg: #f5f6fa;            /* 기본 앱 배경 */
+  --color-bg-alt: #fdf9ff;        /* 대체 배경 (일부 섹션) */
+  --color-bg-home: #f9f9ff;       /* 홈 섹션 전용 배경 */
+  --color-card: #ffffff;          /* 카드 컴포넌트 배경 */
+
+  /* 텍스트 컬러 */
+  --color-text: #1a1a1a;          /* 기본 텍스트 */
+  --color-text-muted: #6b7280;    /* 보조 텍스트 (설명, 라벨 등) */
+
+  /* 경계선 / 위험색 */
+  --color-border: #e5e7eb;        /* 입력창·카드 테두리 */
+  --color-danger: #ef4444;        /* 삭제·오류 강조 빨간색 */
+
+  /* 모서리 반경 */
+  --radius-lg: 18px;   /* 카드, 큰 컨테이너 */
+  --radius-md: 12px;   /* 입력 필드, 버튼 */
+  --radius-sm: 8px;    /* 뱃지, 소형 버튼 */
+
+  /* 카드 그림자 */
+  --shadow-card: 0 2px 12px rgba(15, 23, 42, 0.06);
+
+  /* 전역 폰트: Pretendard(한국어 최적화) → 시스템 폰트 폴백 */
+  --font:
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+}
+
+/* ─── 박스 모델 통일 ────────────────────────────────────────
+   모든 요소의 width/height 계산에 padding·border를 포함시킵니다.
+   레이아웃 계산이 직관적이고 예기치 않은 넘침을 방지합니다. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* ─── html / body 기본 설정 ───────────────────────────────── */
+html,
+body {
+  width: 100%;
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--font);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased; /* 맥OS 폰트 앤티앨리어싱 */
+}
+
+/* ─── 요소별 폰트 상속 ────────────────────────────────────── */
+button {
+  font-family: inherit; /* 부모 폰트 상속 (브라우저 기본값 무시) */
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  display: block; /* 인라인 이미지 하단 여백 제거 */
+}
+
+/* ─── 앱 셸(App Shell) ───────────────────────────────────────
+   모든 페이지 공통: 화면 너비의 60%를 차지하고 중앙 정렬됩니다. */
+.app-shell {
+  width: 60%;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--color-bg);
+  position: relative;
+}
+
+.app-shell--wide {
+  width: 60%;
+}
+
+/* ─── 페이지 섹션 전환 애니메이션 ────────────────────────────
+   내비게이션 버튼 클릭 시 .is-visible 클래스를 토글해 페이지를 전환합니다.
+   기본값 display:none → .is-visible 시 display:block + fadeIn 애니메이션 */
+.page-section {
+  display: none;
+  padding: 16px 16px 32px;
+  animation: fadeIn 0.2s ease;
+}
+
+.page-section.is-visible {
+  display: block;
+}
+
+/* 홈 섹션만 배경색 + 최소 높이 별도 적용 */
+#page-home.page-section {
+  background: var(--color-bg-home);
+  min-height: calc(100vh - 72px); /* 상단 네비(72px) 제외한 전체 높이 */
+}
+
+/* fadeIn: 페이지 전환 시 부드럽게 나타나는 효과 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* 각 페이지 섹션의 큰 제목 공통 스타일 */
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0 0 16px;
+}
+
+/* ─── 공통 폼 그룹 ────────────────────────────────────────────
+   label + input 묶음에 일관된 간격·스타일을 줍니다. */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--color-text);
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fafafa;
+}
+
+/* 포커스 시 테두리를 파란색으로 변경해 현재 입력 위치를 강조 */
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: #fff;
+}
+
+/* ─── 공통 버튼 스타일 ────────────────────────────────────────
+   주요 액션(로그인·저장): 파란 배경 흰 글씨
+   보조 액션(회원가입·취소): 흰 배경 파란 테두리
+   텍스트 액션(ghost): 배경 없이 텍스트만 */
+.btn-primary {
+  width: 100%;
+  padding: 14px;
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  margin-top: 8px;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.05); /* 살짝 밝아지는 hover 효과 */
+}
+
+.btn-secondary {
+  width: 100%;
+  padding: 14px;
+  background: #fff;
+  color: var(--color-primary);
+  font-weight: 700;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  margin-top: 12px;
+}
+
+.btn-ghost {
+  padding: 8px 12px;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+/* ─── 유틸리티 클래스 ─────────────────────────────────────────
+   재사용 가능한 단일 목적 클래스입니다.
+   !important: 다른 규칙에 의해 덮어써지지 않도록 강제합니다. */
+.hidden {
+  display: none !important;
+}
+
+.mt-8 {
+  margin-top: 8px;
+}
+
+/* ─── 빈 상태 메시지 ──────────────────────────────────────────
+   예약 없음, 검색 결과 없음 등 목록이 비어있을 때 표시합니다. */
+.empty-state {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+/* ─── 반응형: 화면 너비 600px 이상 ───────────────────────────
+   태블릿·데스크톱 환경에서 네비·지도 크기를 조금 키웁니다. */
+@media (min-width: 600px) {
+  #map-container,
+  .map-fallback {
+    height: 320px;
+  }
+}
+
+/* ─── 반응형: 화면이 좁으면 전체폭 사용 ─────────────────────────
+   모바일/작은 창에서는 60%가 너무 좁아져 사용성이 떨어지므로 100%로 전환합니다. */
+@media (max-width: 900px) {
+  .app-shell,
+  .app-shell--wide {
+    width: 100%;
+  }
+}
+/* ============================================================
+   nav.css — 상단 네비게이션 바 스타일
+   원래 Flutter 앱의 바텀 네비게이션을 상단으로 이동한 구조입니다.
+   position: sticky 로 스크롤해도 화면 상단에 고정됩니다.
+   ============================================================ */
+
+/* ─── 네비게이션 바 전체 ──────────────────────────────────────
+   브랜드 로고(왼쪽) + 메뉴 버튼들(가운데/오른쪽) + 알림 벨(오른쪽 끝)
+   sticky: 스크롤 내려도 항상 화면 상단에 고정됨
+   z-index: 100으로 콘텐츠 위에 항상 올라와 있음 */
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--color-card);
+  box-shadow: 0 1px 0 var(--color-border); /* 하단 1px 구분선 */
+}
+
+/* ─── 브랜드 로고 영역 ────────────────────────────────────────
+   파란 아이콘 박스 + "토닥" 텍스트로 구성됩니다. */
+.top-nav__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+/* ─── 메뉴 버튼 목록 ─────────────────────────────────────────
+   홈·병원검색·예약내역·마이페이지 4개 버튼을 가로로 나열합니다.
+   flex-wrap: 작은 화면에서는 줄 바꿈 허용 */
+.top-nav__links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ─── 개별 메뉴 아이템 ────────────────────────────────────────
+   아이콘(SVG) + 텍스트 레이블이 세로로 쌓인 버튼입니다.
+   기본색: 회색(비활성) → .is-active 시 파란색으로 전환 */
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 0.65rem;
+  font-weight: 600;
+  min-width: 52px;
+  /* color·background 전환에 부드러운 0.15s 애니메이션 */
+  transition: color 0.15s, background 0.15s;
+}
+
+.nav-item svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* 마우스 올렸을 때: 연한 파란 배경 + 파란 텍스트 */
+.nav-item:hover {
+  background: rgba(51, 102, 255, 0.08);
+  color: var(--color-primary);
+}
+
+/* 현재 활성 페이지 메뉴: 파란색으로 강조 */
+.nav-item.is-active {
+  color: var(--color-primary);
+}
+
+/* ─── 알림 벨 버튼 ────────────────────────────────────────────
+   노란 원형 버튼으로 알림을 시뮬레이션합니다. (데모 기능)
+   flex-shrink: 0으로 화면이 좁아져도 찌그러지지 않습니다. */
+.top-nav__bell {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fde047; /* 노란색 배경 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ─── 반응형: 600px 이상 ──────────────────────────────────────
+   넓은 화면에서는 버튼 간격·최소 너비·폰트 크기를 조금 키웁니다. */
+@media (min-width: 600px) {
+  .top-nav__links {
+    gap: 8px;
+  }
+
+  .nav-item {
+    min-width: 64px;
+    font-size: 0.75rem;
+  }
+}
+/* ============================================================
+   mypage.css — 마이페이지 스타일 (#page-mypage)
+   구성 요소:
+     1. 프로필 (아바타 + 이름·이메일)
+     2. 반려동물 목록 카드 (추가·삭제 포함)
+     3. 내 정보 관리 설정 목록 (프로필 수정·로그아웃)
+   ============================================================ */
+
+/* ─── 프로필 영역 ─────────────────────────────────────────────
+   아바타 원형 + 이름/이메일을 가로로 배치합니다. */
+.mypage-profile {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+/* ─── 아바타 (프로필 이미지) ─────────────────────────────────
+   72×72 원형 컨테이너입니다.
+   이미지가 없으면 연파랑 배경에 이모지가 표시됩니다.
+   overflow: hidden으로 이미지가 원형 밖으로 삐져나오지 않습니다. */
+.avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #dbeafe;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* object-fit: cover로 이미지 비율 유지하며 원형을 채웁니다. */
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mypage-profile h2 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+
+/* 이메일 텍스트: 보조 색상으로 표시 */
+.mypage-profile .email {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/* ─── 소제목 (나의 반려동물 / 내 정보 관리) ───────────────────
+   각 섹션의 상단 제목입니다. */
+.subsection-title {
+  font-size: 1rem;
+  font-weight: 800;
+  margin: 0 0 10px;
+}
+
+/* ─── 반려동물 목록 카드 ─────────────────────────────────────
+   모든 반려동물 행(pet-row)을 하나의 카드로 묶습니다.
+   overflow: hidden으로 마지막 행의 border-bottom이 카드 밖으로 나오지 않습니다. */
+.pet-list-card {
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+/* ─── 개별 반려동물 행 ────────────────────────────────────────
+   썸네일 + 이름/정보 + 수정·삭제 버튼을 가로로 배치합니다.
+   마지막 행(:last-of-type)의 하단 구분선을 제거합니다. */
+.pet-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pet-row:last-of-type {
+  border-bottom: none;
+}
+
+/* ─── 반려동물 썸네일 ────────────────────────────────────────
+   48×48 원형 이미지. 없으면 회색 배경 + 기본 이모지 SVG가 표시됩니다. */
+.pet-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.pet-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ─── 반려동물 정보 텍스트 ────────────────────────────────────
+   이름(bold) + 품종·성별·나이(보조 텍스트)를 세로로 표시합니다. */
+.pet-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pet-info strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.pet-info span {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* ─── 반려동물 액션 버튼 ─────────────────────────────────────
+   수정(✏️)·삭제(🗑) 버튼 묶음입니다.
+   .delete: 빨간색으로 삭제 위험도를 시각적으로 표현합니다. */
+.pet-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pet-actions button {
+  padding: 6px;
+  color: var(--color-text-muted);
+}
+
+.pet-actions button.delete {
+  color: var(--color-danger);
+}
+
+/* ─── 반려동물 추가 버튼 행 ───────────────────────────────────
+   목록 맨 아래에 "+ 반려동물 추가하기" 버튼을 풀 너비로 배치합니다.
+   pet-list-card 내부에 있어 카드의 둥근 모서리를 그대로 사용합니다. */
+.add-pet-row {
+  width: 100%;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-primary);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+/* ─── 설정 카드 ───────────────────────────────────────────────
+   프로필 수정·로그아웃 등 설정 항목을 묶는 카드입니다. */
+.settings-card {
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+/* ─── 설정 행 ────────────────────────────────────────────────
+   각 설정 항목(버튼)의 스타일입니다.
+   하단 구분선으로 항목을 구분하고, 마지막 항목은 선을 제거합니다. */
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  width: 100%;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.95rem;
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+/* ============================================================
+   modal.css — 공통 모달 스타일
+   반려동물 추가 모달 (#modal-pet)
+   예약하기 모달    (#modal-book)
+   두 모달 모두 이 파일의 공통 스타일을 사용합니다.
+   ============================================================ */
+
+/* ─── 모달 배경 (백드롭) ─────────────────────────────────────
+   전체 화면을 반투명 어두운 레이어로 덮어 모달에 집중하게 합니다.
+   기본값: display:none (숨김) → .is-open 클래스 추가 시 표시됩니다.
+   align-items: flex-end로 모달이 화면 하단에서 올라오는 느낌을 줍니다.
+   z-index: 200으로 네비게이션(100)보다 위에 표시됩니다. */
+.modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;              /* top/right/bottom/left 모두 0 (전체 화면 덮기) */
+  z-index: 200;
+  background: rgba(15, 23, 42, 0.45); /* 어두운 반투명 오버레이 */
+  align-items: flex-end; /* 모달을 화면 하단에 정렬 */
+  justify-content: center;
+  padding: 16px;
+}
+
+/* .is-open 추가 시 display:flex로 전환되어 모달이 나타납니다. */
+.modal-backdrop.is-open {
+  display: flex;
+}
+
+/* ─── 모달 본체 ───────────────────────────────────────────────
+   하단 시트(bottom sheet) 형태입니다.
+   - 위쪽 두 모서리만 둥글게 → 화면 하단에서 올라오는 UI 패턴
+   - max-height: 90vh + overflow-y: auto → 내용이 길면 스크롤 가능
+   - slideUp 애니메이션으로 부드럽게 등장합니다. */
+.modal {
+  background: var(--color-card);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px 18px 28px;
+  animation: slideUp 0.25s ease;
+}
+
+/* 모달이 아래에서 위로 올라오는 슬라이드 애니메이션 */
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ─── 모달 헤더 ───────────────────────────────────────────────
+   제목(왼쪽)과 닫기 버튼(오른쪽)을 양 끝에 배치합니다. */
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal__head h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+/* 닫기(×) 버튼: 큰 텍스트, 회색, 여백 패딩 */
+.modal-close {
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+  padding: 4px 8px;
+}
+
+/* ─── 라디오 버튼 행 (암수 선택) ────────────────────────────
+   "수컷 ○  암컷 ○" 형태로 가로 나열합니다. */
+.radio-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: nowrap;
+}
+
+.radio-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  white-space: nowrap; /* '수컷'/'암컷'이 세로로 줄바꿈되지 않도록 */
+}
+
+/* ─── 사진 미리보기 ───────────────────────────────────────────
+   반려동물 사진 선택 후 원형으로 잘려 미리 표시됩니다.
+   .hidden 클래스를 toggle해 사진 선택 전에는 보이지 않습니다. */
+.preview-img {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #f3f4f6;
+  margin-top: 8px;
+}

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>토닥 — 홈</title>
+
+    <!-- 폰트: Pretendard (한국어 최적화 산세리프) -->
+    <link
+      rel="stylesheet"
+      as="style"
+      crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+    />
+
+    <!-- 이 페이지 전용 번들: base + nav + auth + home -->
+    <link rel="stylesheet" href="css/index.css" />
+  </head>
+
+  <body>
+
+    <!-- ============================================================
+         [화면 A] 인증 화면 — 로그인 / 회원가입
+         ─────────────────────────────────────────────────────────────
+         - 로그인이 안 된 상태에서 접속하면 이 화면이 표시됩니다.
+         - 로그인 성공 시 JS가 이 div에 .hidden을 추가하고
+           아래의 #main-app(홈 화면)을 보여줍니다.
+         - 두 패널(#login-panel / #signup-panel)이 겹쳐 있고
+           버튼 클릭으로 서로 .hidden을 토글해 전환됩니다.
+         ============================================================ -->
+    <div id="auth-screen" class="app-shell">
+      <div class="page-section is-visible" style="padding-top: 40px">
+
+        <!-- ── 로그인 패널 ──────────────────────────────────────────
+             기본으로 보이는 패널입니다.
+             [회원가입] 버튼(#btn-go-signup) 클릭 → .hidden 추가 -->
+        <div id="login-panel" class="auth-card">
+          <h1>토닥에 오신 것을 환영합니다</h1>
+          <p class="sub">아이디와 비밀번호로 로그인하세요.</p>
+
+          <!--
+            autocomplete="on": 브라우저 저장 비밀번호 자동 완성 허용
+            submit 이벤트 → handleLogin() → 성공 시 홈 화면 전환
+          -->
+          <form id="form-login" autocomplete="on">
+            <div class="form-group">
+              <label for="login-id">아이디</label>
+              <input
+                type="text"
+                id="login-id"
+                name="username"
+                required
+                placeholder="아이디"
+              />
+            </div>
+            <div class="form-group">
+              <label for="login-pw">비밀번호</label>
+              <input
+                type="password"
+                id="login-pw"
+                name="password"
+                required
+                placeholder="비밀번호"
+              />
+            </div>
+            <!-- type="submit": form submit 이벤트 발생 -->
+            <button type="submit" class="btn-primary">로그인</button>
+            <!-- type="button": 페이지 이동 없이 클릭 이벤트만 발생 -->
+            <button type="button" class="btn-secondary" id="btn-go-signup">
+              회원가입
+            </button>
+          </form>
+
+          <!-- 데모용 관리자 계정 안내 (admin / admin) -->
+          <p class="auth-switch">
+            관리자 데모: <strong>admin</strong> / <strong>admin</strong>
+          </p>
+        </div><!-- /login-panel -->
+
+        <!-- ── 회원가입 패널 ──────────────────────────────────────────
+             기본으로 숨겨진 패널입니다.
+             [회원가입] 버튼 클릭 → .hidden 제거되어 표시됨
+             submit 이벤트 → handleSignup() → 성공 시 홈 화면 전환 -->
+        <div id="signup-panel" class="auth-card hidden">
+          <h1>회원가입</h1>
+          <p class="sub">아이디와 비밀번호만으로 가입할 수 있습니다.</p>
+
+          <!-- autocomplete="off": 회원가입 폼은 자동완성 비활성화 -->
+          <form id="form-signup" autocomplete="off">
+            <div class="form-group">
+              <label for="signup-id">아이디</label>
+              <!-- minlength="2": HTML5 기본 검증 (2자 미만 제출 불가) -->
+              <input
+                type="text"
+                id="signup-id"
+                required
+                minlength="2"
+                placeholder="사용할 아이디"
+              />
+            </div>
+            <div class="form-group">
+              <label for="signup-pw">비밀번호</label>
+              <!-- minlength="4": 최소 4자 이상 -->
+              <input
+                type="password"
+                id="signup-pw"
+                required
+                minlength="4"
+                placeholder="비밀번호"
+              />
+            </div>
+            <button type="submit" class="btn-primary">가입하기</button>
+            <!-- 클릭 시 #login-panel을 다시 표시 -->
+            <button type="button" class="btn-secondary" id="btn-back-login">
+              로그인으로
+            </button>
+          </form>
+        </div><!-- /signup-panel -->
+
+      </div>
+    </div><!-- /auth-screen -->
+
+
+    <!-- ============================================================
+         [화면 B] 홈 — 로그인 성공 후 표시
+         ─────────────────────────────────────────────────────────────
+         - 기본으로 .hidden 상태이며, 로그인 성공 시 JS가 표시합니다.
+         - 이미 로그인된 상태로 접속하면 바로 이 화면을 보여줍니다.
+         ============================================================ -->
+    <div id="main-app" class="app-shell hidden">
+
+      <!-- ── 상단 네비게이션 바 ─────────────────────────────────────
+           모든 페이지 공통 헤더입니다. (각 페이지 파일에 복사되어 있음)
+           position: sticky로 스크롤 시에도 항상 상단에 고정됩니다.
+           각 링크는 href로 다른 페이지 HTML 파일로 이동합니다.
+           현재 페이지(홈): .is-active 클래스가 홈 링크에 적용됩니다. -->
+      <header class="top-nav">
+
+        <!-- 브랜드 로고: 파란 아이콘 + "토닥" 텍스트 -->
+        <div class="top-nav__brand">
+          <span class="top-nav__brand-icon" aria-hidden="true">
+            <img src="images/todoc_logo.png" alt="토닥" width="30" height="30" />
+          </span>
+          토닥
+        </div>
+
+        <!-- 주 메뉴 링크 목록
+             href로 각 페이지 파일에 직접 접근합니다 (MPA 방식).
+             현재 페이지 링크에만 .is-active와 aria-current="page" 적용 -->
+        <nav class="top-nav__links" aria-label="주 메뉴">
+
+          <!-- 홈 (현재 페이지) -->
+          <a href="index.html" class="nav-item is-active" aria-current="page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            홈
+          </a>
+
+          <!-- 병원검색 → search.html -->
+          <a href="search.html" class="nav-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            병원검색
+          </a>
+
+          <!-- 예약내역 → book.html -->
+          <a href="book.html" class="nav-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            예약내역
+          </a>
+
+          <!-- 마이페이지 → mypage.html -->
+          <a href="mypage.html" class="nav-item">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2c-2 0-3.5 1.5-3.5 3.5S10 9 12 9s3.5-1.5 3.5-3.5S14 2 12 2zm-6 12c0-3 2.5-5 6-5s6 2 6 5v3H6v-3z"/>
+            </svg>
+            마이페이지
+          </a>
+        </nav>
+
+        <!-- 알림 벨: 클릭 시 "알림 없음" alert (데모용) -->
+        <button type="button" class="top-nav__bell" id="btn-dummy-noti" title="알림">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
+            <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+          </svg>
+        </button>
+      </header><!-- /top-nav -->
+
+      <main>
+        <!-- ── 홈 콘텐츠 ─────────────────────────────────────────────
+             home.js의 renderHome()이 아래 두 동적 영역을 채웁니다.
+             ─────────────────────────────────────────────────────────── -->
+
+        <!-- 빈 헤더 (추후 사용자 인사말 등 추가 가능) -->
+        <div class="home-header"></div>
+
+        <!-- 지도 플레이스홀더: 홈에서는 카카오맵을 표시하지 않고
+             "병원검색 탭을 이용하세요" 안내 문구만 보여줍니다. -->
+        <div id="home-map-teaser" class="home-map-placeholder">
+          지도는 「병원검색」에서 카카오맵으로 확인할 수 있어요.
+        </div>
+
+        <!-- 병원검색 페이지(search.html)로 이동하는 CTA 버튼 -->
+        <button type="button" class="btn-map-cta" id="btn-goto-search">
+          지도에서 병원 찾기
+        </button>
+
+        <!-- 빠른 서비스 그리드: 미용·호텔·동물카페·용품샵
+             현재는 클릭 이벤트 없음 (추후 각 서비스 페이지 연결 가능) -->
+        <section class="quick-services">
+          <h2>빠른 서비스</h2>
+          <div class="quick-grid">
+            <div class="quick-item quick-item--pink" onclick="readyMessage('미용')"><span>✂</span>미용</div>
+            <div class="quick-item quick-item--green" onclick="readyMessage('호텔')"><span>🛏</span>호텔</div>
+            <div class="quick-item quick-item--orange" onclick="readyMessage('동물카페')"><span>🐾</span>동물카페</div>
+            <div class="quick-item quick-item--yellow" onclick="readyMessage('용품샵')"><span>🏪</span>용품샵</div>
+          </div>
+        </section>
+
+        <!-- 다가오는 예약 카드 영역
+             home.js renderHome()이 가장 가까운 예약을 여기에 삽입합니다. -->
+        <div id="home-upcoming-wrap" class="mt-8"></div>
+
+        <!-- 이전 예약 섹션 헤더 + 전체보기 링크 (book.html로 이동) -->
+        <div class="prev-section-head mt-8">
+          <h2><span>🕐</span> 이전 예약 내역</h2>
+          <a href="book.html" class="link-all">전체보기 →</a>
+        </div>
+
+        <!-- 이전 예약 미니 카드 영역
+             home.js renderHome()이 가장 최근 지난 예약을 여기에 삽입합니다. -->
+        <div id="home-prev-list"></div>
+
+      </main>
+    </div><!-- /main-app -->
+
+
+    <script src="js/index.js"></script>
+
+  </body>
+</html>

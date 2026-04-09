@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>토닥 — 마이페이지</title>
+
+    <link
+      rel="stylesheet"
+      as="style"
+      crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+    />
+
+    <!-- 이 페이지 전용 번들: base + nav + mypage + modal -->
+    <link rel="stylesheet" href="css/mypage.css" />
+  </head>
+
+  <body>
+
+    <!-- ============================================================
+         상단 네비게이션 바 (모든 페이지 공통 구조)
+         현재 페이지: 마이페이지 → "마이페이지" 링크에 .is-active 적용
+         ============================================================ -->
+    <div id="main-app" class="app-shell app-shell--wide">
+      <header class="top-nav">
+
+        <div class="top-nav__brand">
+          <span class="top-nav__brand-icon" aria-hidden="true">
+            <img src="images/todoc_logo.png" alt="토닥" width="30" height="30">
+          </span>
+          토닥
+        </div>
+
+        <!-- 주 메뉴 (마이페이지가 현재 페이지) -->
+        <nav class="top-nav__links" aria-label="주 메뉴">
+          <a href="index.html" class="nav-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            홈
+          </a>
+
+          <a href="search.html" class="nav-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            병원검색
+          </a>
+
+          <a href="book.html" class="nav-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            예약내역
+          </a>
+
+          <!-- 마이페이지 (현재 페이지): .is-active + aria-current="page" -->
+          <a href="mypage.html" class="nav-item is-active" aria-current="page">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2c-2 0-3.5 1.5-3.5 3.5S10 9 12 9s3.5-1.5 3.5-3.5S14 2 12 2zm-6 12c0-3 2.5-5 6-5s6 2 6 5v3H6v-3z"/>
+            </svg>
+            마이페이지
+          </a>
+        </nav>
+
+        <button type="button" class="top-nav__bell" id="btn-dummy-noti" title="알림">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
+            <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+          </svg>
+        </button>
+      </header><!-- /top-nav -->
+
+      <main>
+        <!-- ============================================================
+             마이페이지 본문
+             ─────────────────────────────────────────────────────────────
+             구성:
+               1. 프로필 — 아바타·이름·이메일
+               2. 나의 반려동물 — 등록된 반려동물 목록 + 추가 버튼
+               3. 내 정보 관리 — 프로필 수정(데모)·로그아웃
+
+             mypage.js renderMyPage()가 #mypage-content를 동적으로 채웁니다.
+             관리자/일반 사용자에 따라 UI가 다르게 렌더링됩니다.
+             ============================================================ -->
+        <section class="page-section is-visible">
+          <h1 class="section-title">마이 페이지</h1>
+
+          <!-- renderMyPage()가 아래 div에 프로필·반려동물·설정을 주입합니다.
+               innerHTML로 전체를 교체하므로 이벤트는 렌더링 후 매번 재바인딩됩니다. -->
+          <div id="mypage-content"></div>
+        </section>
+      </main>
+    </div><!-- /main-app -->
+
+
+    <!-- ============================================================
+         [모달] 반려동물 추가 (#modal-pet)
+         ─────────────────────────────────────────────────────────────
+         마이페이지의 "반려동물 추가하기" 버튼 클릭 → .is-open 추가로 표시
+         modal.js setupPetModal()이 이 모달의 모든 이벤트를 등록합니다.
+         ============================================================ -->
+    <div
+      class="modal-backdrop"
+      id="modal-pet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-pet-title"
+    >
+      <div class="modal">
+        <div class="modal__head">
+          <h3 id="modal-pet-title">반려동물 추가</h3>
+          <!-- × 닫기: modal.js에서 클릭 시 .is-open 제거 -->
+          <button type="button" class="modal-close" id="modal-pet-close" aria-label="닫기">×</button>
+        </div>
+
+        <form id="form-pet">
+
+          <!-- ── 사진 업로드 ─────────────────────────────────────────
+               파일 선택 → FileReader API로 base64 data URL 변환
+               → #pet-photo-preview의 src에 설정해 원형 미리보기 표시
+               submit 시 data URL이 photo 필드로 저장됩니다. -->
+          <div class="form-group">
+            <label for="pet-photo">사진</label>
+            <input type="file" id="pet-photo" accept="image/*" />
+            <!-- 파일 선택 전: .hidden / 선택 후: .hidden 제거되어 표시 -->
+            <img src="" alt="" class="preview-img hidden" id="pet-photo-preview" />
+          </div>
+
+          <!-- 이름 (필수) -->
+          <div class="form-group">
+            <label for="pet-name">이름</label>
+            <input type="text" id="pet-name" required placeholder="이름" />
+          </div>
+
+          <!-- 품종 (선택) -->
+          <div class="form-group">
+            <label for="pet-breed">품종</label>
+            <input type="text" id="pet-breed" placeholder="예: 코리안 숏헤어" />
+          </div>
+
+          <!-- 나이: 숫자 입력, 범위 0~40 -->
+          <div class="form-group">
+            <label for="pet-age">나이</label>
+            <input type="number" id="pet-age" min="0" max="40" placeholder="숫자" />
+          </div>
+
+          <!-- 암수 구분: 라디오 버튼 (기본값: 수컷)
+               name="pet-gender"로 그룹화되어 하나만 선택됩니다. -->
+          <div class="form-group">
+            <span>암수구분</span>
+            <div class="radio-row mt-8">
+              <label><input type="radio" name="pet-gender" value="male" checked /> 수컷</label>
+              <label><input type="radio" name="pet-gender" value="female" /> 암컷</label>
+            </div>
+          </div>
+
+          <!-- submit: modal.js form-pet submit 이벤트에서 처리 -->
+          <button type="submit" class="btn-primary">저장</button>
+        </form>
+      </div>
+    </div><!-- /modal-pet -->
+
+
+    <script src="js/mypage.js"></script>
+
+  </body>
+</html>

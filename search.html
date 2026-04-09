@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>토닥 — 병원검색</title>
+
+    <link
+      rel="stylesheet"
+      as="style"
+      crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+    />
+
+    <!-- 이 페이지 전용 번들: base + nav + 검색/지도 + modal -->
+    <link rel="stylesheet" href="css/search.css" />
+  </head>
+
+  <body>
+
+    <!-- ============================================================
+         상단 네비게이션 바 (모든 페이지 공통 구조)
+         ─────────────────────────────────────────────────────────────
+         현재 페이지: 병원검색 → "병원검색" 링크에 .is-active 적용
+         ============================================================ -->
+    <div id="main-app" class="app-shell app-shell--wide">
+      <header class="top-nav">
+
+        <!-- 브랜드 로고 -->
+        <div class="top-nav__brand">
+          <span class="top-nav__brand-icon" aria-hidden="true">
+            <img src="images/todoc_logo.png" alt="토닥" width="30" height="30">
+          </span>
+          토닥
+        </div>
+
+        <!-- 주 메뉴 링크 (병원검색이 현재 페이지) -->
+        <nav class="top-nav__links" aria-label="주 메뉴">
+          <a href="index.html" class="nav-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            홈
+          </a>
+
+          <!-- 병원검색 (현재 페이지): .is-active + aria-current="page" -->
+          <a href="search.html" class="nav-item is-active" aria-current="page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            병원검색
+          </a>
+
+          <a href="book.html" class="nav-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            예약내역
+          </a>
+
+          <a href="mypage.html" class="nav-item">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2c-2 0-3.5 1.5-3.5 3.5S10 9 12 9s3.5-1.5 3.5-3.5S14 2 12 2zm-6 12c0-3 2.5-5 6-5s6 2 6 5v3H6v-3z"/>
+            </svg>
+            마이페이지
+          </a>
+        </nav>
+
+        <button type="button" class="top-nav__bell" id="btn-dummy-noti" title="알림">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
+            <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+          </svg>
+        </button>
+      </header><!-- /top-nav -->
+
+      <main>
+        <!-- ============================================================
+             병원검색 페이지 본문
+             ─────────────────────────────────────────────────────────────
+             구성:
+               1. 검색창 — 키워드 입력 (Enter 즉시 검색 / input 디바운스 검색)
+               2. 필터 칩 — 전체·24시간·응급·주말·영업중
+               3. 카카오맵 컨테이너 — map.js initMapOnce()가 초기화
+               4. 지도 폴백 UI — API 키 없을 때 대신 표시
+               5. 병원 카드 목록 — map.js renderHospitalList()가 채움
+             ============================================================ -->
+        <section class="page-section is-visible">
+          <h1 class="section-title">병원검색</h1>
+
+          <!-- ── 검색창 ──────────────────────────────────────────────
+               .search-bar: 돋보기 SVG + <input>이 가로 배치된 pill 형태
+               - Enter 키: 즉시 searchHospitalsKeyword() 호출
+               - input 이벤트: 400ms 디바운스 후 2자 이상이면 자동 검색 -->
+          <div class="search-bar-wrap">
+            <div class="search-bar">
+              <svg width="20" height="20" viewBox="0 0 24 24"
+                   fill="none" stroke="#94a3b8" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                type="search"
+                id="hospital-search-input"
+                placeholder="병원명, 지역..."
+                autocomplete="off"
+              />
+            </div>
+          </div>
+
+          <!-- ── 필터 칩 목록 ──────────────────────────────────────────
+               가로 스크롤 가능한 필터 버튼 목록입니다.
+               data-filter: 클릭 시 activeFilter 전역 변수를 이 값으로 업데이트합니다.
+               .is-active: 현재 선택된 필터를 파란색으로 강조합니다. -->
+          <div class="filter-chips" id="filter-chips" role="tablist">
+            <!-- 전체: 필터 없이 모든 병원 표시 (기본 활성) -->
+            <button type="button" class="chip is-active" data-filter="all">전체</button>
+            <!-- 24시간: tags 배열에 "24h"가 포함된 병원만 표시 -->
+            <button type="button" class="chip" data-filter="24h">24시간</button>
+            <!-- 응급: tags 배열에 "emergency"가 포함된 병원만 표시 -->
+            <button type="button" class="chip" data-filter="emergency">응급</button>
+            <!-- 주말 진료: tags 배열에 "weekend"가 포함된 병원만 표시 -->
+            <button type="button" class="chip" data-filter="weekend">주말 진료</button>
+            <!-- 영업중: tags 배열에 "open"이 포함된 병원만 표시 -->
+            <button type="button" class="chip" data-filter="open">영업중</button>
+          </div>
+
+          <!-- ── 카카오맵 컨테이너 ──────────────────────────────────────
+               map.js의 initMapOnce()가 이 div를 target으로 카카오맵을 렌더링합니다.
+               API 키가 없으면 .hidden 처리되고 아래 폴백 UI가 표시됩니다.
+               위쪽 두 모서리만 둥글게 → 아래 병원 목록과 자연스럽게 연결됩니다. -->
+          <div id="map-container"></div>
+
+          <!-- ── 지도 폴백 UI ────────────────────────────────────────────
+               카카오 API 키가 없거나 로드 실패 시 격자 패턴으로 대체됩니다.
+               기본: .hidden → 폴백 상황에서만 .hidden 제거 -->
+          <div id="map-fallback" class="map-fallback hidden"></div>
+
+          <!-- 지도 상태 메시지: "카카오맵 로드됨" 또는 "데모 모드" 등 -->
+          <p id="map-status" class="mt-8"
+             style="font-size:0.8rem;color:var(--color-text-muted)"></p>
+
+          <!-- ── 병원 카드 목록 ──────────────────────────────────────────
+               map.js의 renderHospitalList()가 검색 결과를 여기에 삽입합니다.
+               각 카드에 "예약하기" 버튼 → openBookModal() 호출
+               각 카드에 "상세보기" 버튼 → 데모 alert -->
+          <div class="hospital-list" id="hospital-list"></div>
+        </section>
+      </main>
+    </div><!-- /main-app -->
+
+
+    <!-- ============================================================
+         [모달] 예약하기 (#modal-book)
+         ─────────────────────────────────────────────────────────────
+         병원 카드의 "예약하기" 버튼 클릭 → map.js openBookModal()이
+         선택한 병원 정보를 hidden input에 채우고 .is-open을 추가합니다.
+         form submit → addReservation()으로 localStorage에 예약 저장
+         ============================================================ -->
+    <div
+      class="modal-backdrop"
+      id="modal-book"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-book-title"
+    >
+      <div class="modal">
+        <div class="modal__head">
+          <h3 id="modal-book-title">예약하기</h3>
+          <!-- × 닫기: .is-open 제거 → 모달 숨김 -->
+          <button type="button" class="modal-close" id="modal-book-close" aria-label="닫기">×</button>
+        </div>
+
+        <!-- 선택한 병원 이름·주소가 openBookModal()에 의해 동적 삽입되는 영역 -->
+        <div id="modal-book-body"></div>
+
+        <form id="form-book">
+
+          <!-- hidden input 묶음: 선택한 병원의 메타 정보를 저장합니다.
+               사용자에게는 보이지 않으며, form submit 시 예약 레코드에 포함됩니다. -->
+          <input type="hidden" id="book-place-id" />       <!-- 카카오 place ID -->
+          <input type="hidden" id="book-place-name" />     <!-- 병원명 -->
+          <input type="hidden" id="book-place-address" />  <!-- 도로명 주소 -->
+          <input type="hidden" id="book-place-phone" />    <!-- 전화번호 -->
+          <input type="hidden" id="book-place-y" />        <!-- 위도(latitude) -->
+          <input type="hidden" id="book-place-x" />        <!-- 경도(longitude) -->
+
+          <!-- 예약 일시: datetime-local로 날짜와 시간을 한 번에 선택합니다.
+               openBookModal()이 현재 시각을 기본값으로 채웁니다. -->
+          <div class="form-group">
+            <label for="book-datetime">예약 일시</label>
+            <input type="datetime-local" id="book-datetime" required />
+          </div>
+
+          <!-- 방문 유형: 예방접종·정기검진 등 자유 입력 -->
+          <div class="form-group">
+            <label for="book-reason">방문 유형</label>
+            <input type="text" id="book-reason" placeholder="예: 예방접종" />
+          </div>
+
+          <!-- 반려동물 이름: openBookModal()이 첫 번째 등록 반려동물 이름으로 자동 채움 -->
+          <div class="form-group">
+            <label for="book-pet-name">반려동물 이름</label>
+            <input type="text" id="book-pet-name" placeholder="예: 뭉치" />
+          </div>
+
+          <!-- 보호자 이름 -->
+          <div class="form-group">
+            <label for="book-name">보호자 이름</label>
+            <input type="text" id="book-name" placeholder="이름 입력" />
+          </div>
+
+          <!-- 보호자 전화번호 (required: 필수 입력 항목) -->
+          <div class="form-group">
+            <label for="book-phone">보호자 전화번호</label>
+            <input type="text" id="book-phone" required placeholder="010-0000-0000" />
+          </div>
+
+          <!-- 제출: 실제 예약이 아닌 localStorage 저장 데모 -->
+          <button type="submit" class="btn-primary">예약 완료 (목업)</button>
+        </form>
+      </div>
+    </div><!-- /modal-book -->
+
+
+    <!--
+      카카오 키는 배포(Vercel)에서 /api/config 로 주입됩니다.
+      로컬에서만 쓰고 싶다면 js/config.secrets.js 를 직접 만들어 window.TODOC_SECRETS 를 세팅해도 됩니다.
+      (단, 이 HTML에서는 자동 로드하지 않습니다.)
+    -->
+    <script src="js/search.js"></script>
+
+  </body>
+</html>

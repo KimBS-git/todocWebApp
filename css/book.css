@@ -1,0 +1,527 @@
+/* ============================================================
+   book.css — 예약내역 페이지 번들
+   base + nav + reservations
+   ============================================================ */
+/* ============================================================
+   base.css — 전역 CSS 변수, 리셋, 레이아웃 뼈대
+   모든 페이지에 공통으로 적용되는 기초 스타일입니다.
+   ============================================================ */
+
+/* ─── CSS 커스텀 프로퍼티(디자인 토큰) ────────────────────────
+   :root 안에 선언해 전체 CSS 어디서나 var(--이름)으로 참조합니다.
+   색상·반경·그림자를 한 곳에서 관리해 디자인 일관성을 유지합니다. */
+:root {
+  /* 브랜드 컬러 */
+  --color-primary: #3366ff;       /* 주요 파란색 (버튼, 강조 등) */
+  --color-primary-soft: #5c76cc;  /* 살짝 흐린 파란색 (hover 보조) */
+
+  /* 배경색 계열 */
+  --color-bg: #f5f6fa;            /* 기본 앱 배경 */
+  --color-bg-alt: #fdf9ff;        /* 대체 배경 (일부 섹션) */
+  --color-bg-home: #f9f9ff;       /* 홈 섹션 전용 배경 */
+  --color-card: #ffffff;          /* 카드 컴포넌트 배경 */
+
+  /* 텍스트 컬러 */
+  --color-text: #1a1a1a;          /* 기본 텍스트 */
+  --color-text-muted: #6b7280;    /* 보조 텍스트 (설명, 라벨 등) */
+
+  /* 경계선 / 위험색 */
+  --color-border: #e5e7eb;        /* 입력창·카드 테두리 */
+  --color-danger: #ef4444;        /* 삭제·오류 강조 빨간색 */
+
+  /* 모서리 반경 */
+  --radius-lg: 18px;   /* 카드, 큰 컨테이너 */
+  --radius-md: 12px;   /* 입력 필드, 버튼 */
+  --radius-sm: 8px;    /* 뱃지, 소형 버튼 */
+
+  /* 카드 그림자 */
+  --shadow-card: 0 2px 12px rgba(15, 23, 42, 0.06);
+
+  /* 전역 폰트: Pretendard(한국어 최적화) → 시스템 폰트 폴백 */
+  --font:
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+}
+
+/* ─── 박스 모델 통일 ────────────────────────────────────────
+   모든 요소의 width/height 계산에 padding·border를 포함시킵니다.
+   레이아웃 계산이 직관적이고 예기치 않은 넘침을 방지합니다. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* ─── html / body 기본 설정 ───────────────────────────────── */
+html,
+body {
+  width: 100%;
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--font);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased; /* 맥OS 폰트 앤티앨리어싱 */
+}
+
+/* ─── 요소별 폰트 상속 ────────────────────────────────────── */
+button {
+  font-family: inherit; /* 부모 폰트 상속 (브라우저 기본값 무시) */
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  display: block; /* 인라인 이미지 하단 여백 제거 */
+}
+
+/* ─── 앱 셸(App Shell) ───────────────────────────────────────
+   모든 페이지 공통: 화면 너비의 60%를 차지하고 중앙 정렬됩니다. */
+.app-shell {
+  width: 60%;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--color-bg);
+  position: relative;
+}
+
+.app-shell--wide {
+  width: 60%;
+}
+
+/* ─── 페이지 섹션 전환 애니메이션 ────────────────────────────
+   내비게이션 버튼 클릭 시 .is-visible 클래스를 토글해 페이지를 전환합니다.
+   기본값 display:none → .is-visible 시 display:block + fadeIn 애니메이션 */
+.page-section {
+  display: none;
+  padding: 16px 16px 32px;
+  animation: fadeIn 0.2s ease;
+}
+
+.page-section.is-visible {
+  display: block;
+}
+
+/* 홈 섹션만 배경색 + 최소 높이 별도 적용 */
+#page-home.page-section {
+  background: var(--color-bg-home);
+  min-height: calc(100vh - 72px); /* 상단 네비(72px) 제외한 전체 높이 */
+}
+
+/* fadeIn: 페이지 전환 시 부드럽게 나타나는 효과 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* 각 페이지 섹션의 큰 제목 공통 스타일 */
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0 0 16px;
+}
+
+/* ─── 공통 폼 그룹 ────────────────────────────────────────────
+   label + input 묶음에 일관된 간격·스타일을 줍니다. */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--color-text);
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fafafa;
+}
+
+/* 포커스 시 테두리를 파란색으로 변경해 현재 입력 위치를 강조 */
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: #fff;
+}
+
+/* ─── 공통 버튼 스타일 ────────────────────────────────────────
+   주요 액션(로그인·저장): 파란 배경 흰 글씨
+   보조 액션(회원가입·취소): 흰 배경 파란 테두리
+   텍스트 액션(ghost): 배경 없이 텍스트만 */
+.btn-primary {
+  width: 100%;
+  padding: 14px;
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  margin-top: 8px;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.05); /* 살짝 밝아지는 hover 효과 */
+}
+
+.btn-secondary {
+  width: 100%;
+  padding: 14px;
+  background: #fff;
+  color: var(--color-primary);
+  font-weight: 700;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  margin-top: 12px;
+}
+
+.btn-ghost {
+  padding: 8px 12px;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+/* ─── 유틸리티 클래스 ─────────────────────────────────────────
+   재사용 가능한 단일 목적 클래스입니다.
+   !important: 다른 규칙에 의해 덮어써지지 않도록 강제합니다. */
+.hidden {
+  display: none !important;
+}
+
+.mt-8 {
+  margin-top: 8px;
+}
+
+/* ─── 빈 상태 메시지 ──────────────────────────────────────────
+   예약 없음, 검색 결과 없음 등 목록이 비어있을 때 표시합니다. */
+.empty-state {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+/* ─── 반응형: 화면 너비 600px 이상 ───────────────────────────
+   태블릿·데스크톱 환경에서 네비·지도 크기를 조금 키웁니다. */
+@media (min-width: 600px) {
+  #map-container,
+  .map-fallback {
+    height: 320px;
+  }
+}
+
+/* ─── 반응형: 화면이 좁으면 전체폭 사용 ─────────────────────────
+   모바일/작은 창에서는 60%가 너무 좁아져 사용성이 떨어지므로 100%로 전환합니다. */
+@media (max-width: 900px) {
+  .app-shell,
+  .app-shell--wide {
+    width: 100%;
+  }
+}
+/* ============================================================
+   nav.css — 상단 네비게이션 바 스타일
+   원래 Flutter 앱의 바텀 네비게이션을 상단으로 이동한 구조입니다.
+   position: sticky 로 스크롤해도 화면 상단에 고정됩니다.
+   ============================================================ */
+
+/* ─── 네비게이션 바 전체 ──────────────────────────────────────
+   브랜드 로고(왼쪽) + 메뉴 버튼들(가운데/오른쪽) + 알림 벨(오른쪽 끝)
+   sticky: 스크롤 내려도 항상 화면 상단에 고정됨
+   z-index: 100으로 콘텐츠 위에 항상 올라와 있음 */
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--color-card);
+  box-shadow: 0 1px 0 var(--color-border); /* 하단 1px 구분선 */
+}
+
+/* ─── 브랜드 로고 영역 ────────────────────────────────────────
+   파란 아이콘 박스 + "토닥" 텍스트로 구성됩니다. */
+.top-nav__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+/* ─── 메뉴 버튼 목록 ─────────────────────────────────────────
+   홈·병원검색·예약내역·마이페이지 4개 버튼을 가로로 나열합니다.
+   flex-wrap: 작은 화면에서는 줄 바꿈 허용 */
+.top-nav__links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ─── 개별 메뉴 아이템 ────────────────────────────────────────
+   아이콘(SVG) + 텍스트 레이블이 세로로 쌓인 버튼입니다.
+   기본색: 회색(비활성) → .is-active 시 파란색으로 전환 */
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 0.65rem;
+  font-weight: 600;
+  min-width: 52px;
+  /* color·background 전환에 부드러운 0.15s 애니메이션 */
+  transition: color 0.15s, background 0.15s;
+}
+
+.nav-item svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* 마우스 올렸을 때: 연한 파란 배경 + 파란 텍스트 */
+.nav-item:hover {
+  background: rgba(51, 102, 255, 0.08);
+  color: var(--color-primary);
+}
+
+/* 현재 활성 페이지 메뉴: 파란색으로 강조 */
+.nav-item.is-active {
+  color: var(--color-primary);
+}
+
+/* ─── 알림 벨 버튼 ────────────────────────────────────────────
+   노란 원형 버튼으로 알림을 시뮬레이션합니다. (데모 기능)
+   flex-shrink: 0으로 화면이 좁아져도 찌그러지지 않습니다. */
+.top-nav__bell {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fde047; /* 노란색 배경 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ─── 반응형: 600px 이상 ──────────────────────────────────────
+   넓은 화면에서는 버튼 간격·최소 너비·폰트 크기를 조금 키웁니다. */
+@media (min-width: 600px) {
+  .top-nav__links {
+    gap: 8px;
+  }
+
+  .nav-item {
+    min-width: 64px;
+    font-size: 0.75rem;
+  }
+}
+/* ============================================================
+   reservations.css — 예약 내역 페이지 스타일 (#page-reservations)
+   구성 요소:
+     1. 탭 (예정된 예약 / 지난 예약 전환)
+     2. 예약 카드 (병원명·반려동물·방문유형·날짜·D-day 뱃지)
+   ============================================================ */
+
+/* ─── 탭 컨테이너 ─────────────────────────────────────────────
+   "예정된 예약"과 "지난 예약"을 전환하는 탭 버튼 묶음입니다.
+   하단 border로 탭과 컨텐츠 사이 구분선을 만듭니다. */
+.res-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 16px;
+}
+
+/* ─── 개별 탭 버튼 ────────────────────────────────────────────
+   flex: 1로 두 탭이 동일한 너비를 가집니다.
+   비활성: 회색 / .is-active: 파란 텍스트 + 하단 밑줄 인디케이터 */
+.res-tab {
+  flex: 1;
+  padding: 12px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  position: relative; /* ::after 가상 요소(밑줄)의 기준점 */
+}
+
+.res-tab.is-active {
+  color: var(--color-primary);
+}
+
+/* 활성 탭 하단 강조선: 탭 너비의 50%(left 25% ~ right 25%) */
+.res-tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 25%;
+  right: 25%;
+  bottom: 0;
+  height: 3px;
+  background: var(--color-primary);
+  border-radius: 2px 2px 0 0;
+}
+
+/* ─── 예약 카드 ───────────────────────────────────────────────
+   각 예약 정보를 담는 카드입니다.
+   overflow: hidden으로 border-radius가 자식 요소까지 적용됩니다.
+   파란 계열 반투명 테두리로 예약 관련 UI임을 강조합니다. */
+.res-card {
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  padding: 0;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(51, 102, 255, 0.12);
+  overflow: hidden;
+}
+
+/* ─── 카드 상단 영역 ─────────────────────────────────────────
+   아이콘 + 병원명/설명 + D-day 뱃지를 가로로 배치합니다. */
+.res-card__top {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  align-items: flex-start;
+}
+
+/* 카드 왼쪽 파란 사각 아이콘 */
+.res-card__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* 병원명 + 반려동물·방문유형 텍스트 영역 */
+.res-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.res-card__info h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.res-card__info .sub {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/* ─── 카드 우측 상단: 예약 날짜 + (예정) D-day 스택 ───────────── */
+.res-card__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.res-card__date {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ─── D-day 뱃지 (카드 내부) ─────────────────────────────────
+   --dday: 오늘 방문 → 빨간 배경
+   --d7: 미래 방문 → 연파랑 배경 */
+.res-card__badge {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.res-card__badge--dday {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.res-card__badge--d7 {
+  background: #eff6ff;
+  color: var(--color-primary);
+}
+
+/* 우측 컬럼에 들어가는 D-day는 날짜 아래로 내려가도록 간격 최소화 */
+.res-card__badge--stacked {
+  margin-top: 0;
+}
+
+/* ─── 카드 구분선 ─────────────────────────────────────────────
+   상단 정보와 하단 날짜/버튼 영역을 구분하는 1px 수평선입니다. */
+.res-card__divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 0 14px;
+}
+
+/* ─── 카드 하단 영역 ─────────────────────────────────────────
+   예약 날짜(왼쪽) + 재예약·상세보기 버튼(오른쪽)을 양 끝에 배치합니다.
+   flex-wrap으로 좁은 화면에서 줄 바꿈됩니다. */
+.res-card__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  flex-wrap: wrap;
+}
+
+/* ─── 카드 하단 액션 영역 (텍스트 버튼 2개, 좌우 꽉 차게) ───────── */
+.res-card__actions {
+  width: 100%;
+  display: flex;
+  gap: 0;
+  border-top: 0;
+}
+
+.res-card__action {
+  flex: 1;
+  padding: 14px 12px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  background: #fff;
+  text-align: center;
+}
+
+.res-card__action + .res-card__action {
+  border-left: 1px solid var(--color-border);
+}
+
+.res-card__action:hover {
+  background: rgba(51, 102, 255, 0.06);
+}
