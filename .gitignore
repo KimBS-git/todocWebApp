@@ -1,5 +1,3 @@
-# 로컬 전용 비밀 설정 (예시는 config.secrets.example.js 사용)
-js/config.secrets.js
 
 # 환경 변수 파일
 .env

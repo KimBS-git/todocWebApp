@@ -11,12 +11,14 @@
 
 /* =============================================================================
  * [설정] 카카오맵 API 키
- * 카카오 개발자 콘솔(https://developers.kakao.com)에서
- * 앱 생성 후 "JavaScript 키"를 발급받아 아래 빈 문자열에 붙여넣으세요.
- * 비워두면 카카오맵 없이 목업(MOCK) 병원 목록만 표시됩니다.
+ * - 배포(Vercel): Environment Variables의 KAKAO_APP_KEY를 /api/config로 주입받아 사용합니다.
+ * - 로컬 개발: 필요하면 window.TODOC_SECRETS = { KAKAO_APP_KEY: \"...\" } 형태로 직접 주입할 수 있습니다.
  * ============================================================================= */
 const CONFIG = {
-  KAKAO_APP_KEY: "", // 예: "abcdef1234567890abcdef1234567890"
+  get KAKAO_APP_KEY() {
+    const w = typeof window !== "undefined" && window.TODOC_SECRETS;
+    return (w && typeof w.KAKAO_APP_KEY === "string" && w.KAKAO_APP_KEY) || "";
+  },
 };
 
 /* =============================================================================
@@ -673,6 +675,7 @@ function formatShortDate(iso) {
     document.getElementById("auth-screen").classList.add("hidden");
     document.getElementById("main-app").classList.remove("hidden");
     renderHome();
+    initHomeMapOnce();
   }
 })();
 
@@ -685,6 +688,7 @@ document.getElementById("form-login").addEventListener("submit", (e) => {
     document.getElementById("auth-screen").classList.add("hidden");
     document.getElementById("main-app").classList.remove("hidden");
     renderHome();
+    initHomeMapOnce();
   }
 });
 
@@ -697,6 +701,7 @@ document.getElementById("form-signup").addEventListener("submit", (e) => {
     document.getElementById("auth-screen").classList.add("hidden");
     document.getElementById("main-app").classList.remove("hidden");
     renderHome();
+    initHomeMapOnce();
   }
 });
 
@@ -720,4 +725,123 @@ document.getElementById("btn-dummy-noti").addEventListener("click", () => {
 
 function readyMessage(serviceName) {
   alert(`${serviceName} 서비스는 준비 중입니다.`);
+}
+
+/* =============================================================================
+ * [홈 지도] 카카오맵 미리보기 (동물병원만)
+ * - 배포에서는 /api/config에서 키를 주입받습니다.
+ * ============================================================================= */
+let homeMapInitialized = false;
+let homeMap = null;
+let homePlaces = null;
+let homeMarkers = [];
+
+async function ensureSecretsLoaded() {
+  if (typeof window === "undefined") return;
+  if (window.TODOC_SECRETS && typeof window.TODOC_SECRETS.KAKAO_APP_KEY === "string" && window.TODOC_SECRETS.KAKAO_APP_KEY) {
+    return;
+  }
+  try {
+    const r = await fetch("/api/config", { cache: "no-store" });
+    if (!r.ok) return;
+    const data = await r.json();
+    window.TODOC_SECRETS = {
+      ...(window.TODOC_SECRETS || {}),
+      KAKAO_APP_KEY: typeof data.KAKAO_APP_KEY === "string" ? data.KAKAO_APP_KEY : "",
+    };
+  } catch {
+    // 로컬에서는 /api/config가 없을 수 있음
+  }
+}
+
+function hasKakaoKey() {
+  return typeof CONFIG.KAKAO_APP_KEY === "string" && CONFIG.KAKAO_APP_KEY.length > 10;
+}
+
+function loadKakaoScript() {
+  return new Promise((resolve, reject) => {
+    if (typeof kakao !== "undefined" && kakao.maps) {
+      resolve();
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${CONFIG.KAKAO_APP_KEY}&libraries=services&autoload=false`;
+    s.onload = () => {
+      if (typeof kakao !== "undefined") kakao.maps.load(resolve);
+      else reject(new Error("kakao"));
+    };
+    s.onerror = () => reject(new Error("load fail"));
+    document.head.appendChild(s);
+  });
+}
+
+function showHomeMapFallback(message) {
+  const fb = document.getElementById("home-map-fallback");
+  const c = document.getElementById("home-map-container");
+  if (fb) {
+    fb.textContent = message;
+    fb.classList.remove("hidden");
+  }
+  if (c) c.classList.add("hidden");
+}
+
+function hideHomeMapFallback() {
+  const fb = document.getElementById("home-map-fallback");
+  const c = document.getElementById("home-map-container");
+  if (fb) fb.classList.add("hidden");
+  if (c) c.classList.remove("hidden");
+}
+
+function clearHomeMarkers() {
+  homeMarkers.forEach((m) => m.setMap(null));
+  homeMarkers = [];
+}
+
+async function initHomeMapOnce() {
+  if (homeMapInitialized) return;
+  homeMapInitialized = true;
+
+  const statusEl = document.getElementById("home-map-status");
+  await ensureSecretsLoaded();
+
+  if (!hasKakaoKey()) {
+    showHomeMapFallback("카카오맵 키를 불러오지 못했습니다. (도메인 등록/환경변수 확인)");
+    if (statusEl) statusEl.textContent = "";
+    return;
+  }
+
+  try {
+    await loadKakaoScript();
+    hideHomeMapFallback();
+
+    const container = document.getElementById("home-map-container");
+    if (!container) return;
+
+    const center = new kakao.maps.LatLng(37.5665, 126.978);
+    homeMap = new kakao.maps.Map(container, { center, level: 6 });
+    homePlaces = new kakao.maps.services.Places();
+
+    if (statusEl) statusEl.textContent = "카카오맵 로드됨";
+
+    // 홈에서는 항상 '동물병원'만 표시
+    homePlaces.keywordSearch(
+      "동물병원",
+      (data, st) => {
+        if (st !== kakao.maps.services.Status.OK || !data.length) return;
+        clearHomeMarkers();
+        const bounds = new kakao.maps.LatLngBounds();
+        data.slice(0, 10).forEach((p) => {
+          const pos = new kakao.maps.LatLng(parseFloat(p.y), parseFloat(p.x));
+          bounds.extend(pos);
+          const m = new kakao.maps.Marker({ map: homeMap, position: pos });
+          homeMarkers.push(m);
+        });
+        homeMap.setBounds(bounds);
+      },
+      { location: center, radius: 8000 }
+    );
+  } catch {
+    showHomeMapFallback("카카오맵을 불러오지 못했습니다. 도메인 등록을 확인하세요.");
+    if (statusEl) statusEl.textContent = "";
+  }
 }

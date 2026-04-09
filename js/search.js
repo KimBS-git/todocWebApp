@@ -12,8 +12,10 @@
 
 /* =============================================================================
  * [설정] 카카오맵 API 키
- * 실제 키는 Git에 올리지 않는 js/config.secrets.js 에서 설정합니다.
- * 비워두면 카카오맵 없이 목업(MOCK) 병원 목록만 표시됩니다.
+ * - 배포(Vercel): Environment Variables의 KAKAO_APP_KEY를 /api/config로 주입받아 사용합니다.
+ * - 로컬 개발: 필요하면 window.TODOC_SECRETS = { KAKAO_APP_KEY: "..." } 형태로 직접 주입할 수 있습니다.
+ *
+ * 비워두면 카카오맵 없이 목록/지도는 표시되지 않습니다.
  * ============================================================================= */
 const CONFIG = {
   get KAKAO_APP_KEY() {
@@ -23,28 +25,24 @@ const CONFIG = {
 };
 
 /* =============================================================================
- * [설정 로드] 배포(Vercel)에서 키 주입
- * - /api/config 에서 KAKAO_APP_KEY를 받아 window.TODOC_SECRETS에 채웁니다.
- * - 이미 window.TODOC_SECRETS가 있으면(로컬 개발 등) 그대로 사용합니다.
+ * [설정 로드] Vercel 환경변수 주입 (/api/config)
+ * - window.TODOC_SECRETS가 이미 있으면 그대로 사용합니다.
  * ============================================================================= */
 async function ensureSecretsLoaded() {
   if (typeof window === "undefined") return;
-  if (window.TODOC_SECRETS && typeof window.TODOC_SECRETS.KAKAO_APP_KEY === "string") {
-    return { ok: Boolean(window.TODOC_SECRETS.KAKAO_APP_KEY), via: "window.TODOC_SECRETS" };
+  if (window.TODOC_SECRETS && typeof window.TODOC_SECRETS.KAKAO_APP_KEY === "string" && window.TODOC_SECRETS.KAKAO_APP_KEY) {
+    return;
   }
-
   try {
     const r = await fetch("/api/config", { cache: "no-store" });
-    if (!r.ok) return { ok: false, via: `/api/config (${r.status})` };
+    if (!r.ok) return;
     const data = await r.json();
     window.TODOC_SECRETS = {
       ...(window.TODOC_SECRETS || {}),
       KAKAO_APP_KEY: typeof data.KAKAO_APP_KEY === "string" ? data.KAKAO_APP_KEY : "",
     };
-    return { ok: Boolean(window.TODOC_SECRETS.KAKAO_APP_KEY), via: "/api/config (200)" };
   } catch {
-    // 로컬(Go Live 등)에서는 /api/config가 없을 수 있으므로 조용히 무시
-    return { ok: false, via: "/api/config (fetch failed)" };
+    // 로컬(Go Live 등)에서는 /api/config가 없을 수 있으므로 무시
   }
 }
 
@@ -657,13 +655,13 @@ function initMapOnce() {
 
   const statusEl = document.getElementById("map-status");
 
-  // API 키가 없으면 목업 모드로 동작
+  // API 키가 없으면 지도/목록을 표시하지 않음
   if (!hasKakaoKey()) {
     showMapFallback(
-      "카카오맵 키를 불러오지 못했습니다. (Vercel 배포라면 Project Settings → Environment Variables에 KAKAO_APP_KEY를 등록 후 Redeploy) 지금은 목업 병원 목록만 표시됩니다."
+      "카카오맵 키를 불러오지 못했습니다. (Vercel 환경변수 KAKAO_APP_KEY 및 카카오 콘솔 도메인 등록을 확인하세요.)"
     );
-    statusEl.textContent = "데모 모드: 목업 병원 데이터";
-    renderHospitalList(MOCK_VET_HOSPITALS);
+    statusEl.textContent = "";
+    renderHospitalList([]);
     return;
   }
 
@@ -693,7 +691,7 @@ function initMapOnce() {
         "카카오맵을 불러오지 못했습니다. API 키와 도메인 등록을 확인하세요."
       );
       statusEl.textContent = "";
-      renderHospitalList(MOCK_VET_HOSPITALS); // 목업 데이터로 대체
+      renderHospitalList([]);
     });
 }
 
@@ -704,12 +702,7 @@ function initMapOnce() {
  * @param {string} keyword - 검색어 (예: "강남 동물병원", "24시")
  * ============================================================================= */
 function searchHospitalsKeyword(keyword) {
-  // 카카오 API 미사용 시: 목업 데이터 필터링
-  if (!placesService || !kakaoMap) {
-    const filtered = filterMockHospitals(activeFilter);
-    renderHospitalList(filterMockByKeyword(filtered, keyword));
-    return;
-  }
+  if (!placesService || !kakaoMap) return;
 
   // 카카오 Places API 키워드 검색
   placesService.keywordSearch(
@@ -721,7 +714,7 @@ function searchHospitalsKeyword(keyword) {
         status !== kakao.maps.services.Status.OK ||
         !data.length
       ) {
-        renderHospitalList(MOCK_VET_HOSPITALS);
+        renderHospitalList([]);
         return;
       }
 
@@ -758,6 +751,16 @@ function searchHospitalsKeyword(keyword) {
       radius: 8000,                   // 반경 8km 이내
     }
   );
+}
+
+/* =============================================================================
+ * [유틸] 검색어 정규화
+ * - 지역만 입력해도 항상 "동물병원" 검색이 되도록 보정합니다.
+ * ============================================================================= */
+function normalizeHospitalQuery(q) {
+  const s = (q || "").trim();
+  if (!s) return "동물병원";
+  return s.includes("동물병원") ? s : `${s} 동물병원`;
 }
 
 /* =============================================================================
@@ -908,13 +911,8 @@ function closeBookModal() {
   }
 })();
 
-// 키를 먼저 주입한 뒤 카카오맵 초기화
 (async () => {
-  const statusEl = document.getElementById("map-status");
-  const r = await ensureSecretsLoaded();
-  if (statusEl && r && r.via) {
-    statusEl.textContent = `키 로드: ${r.via}${r.ok ? " (OK)" : " (EMPTY)"}`;
-  }
+  await ensureSecretsLoaded();
   initMapOnce();
 })();
 
@@ -923,7 +921,7 @@ const searchInput = document.getElementById("hospital-search-input");
 searchInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
-    searchHospitalsKeyword(e.target.value.trim() || "동물병원");
+    searchHospitalsKeyword(normalizeHospitalQuery(e.target.value));
   }
 });
 
@@ -931,7 +929,7 @@ searchInput.addEventListener(
   "input",
   debounce((e) => {
     if (e.target.value.trim().length >= 2) {
-      searchHospitalsKeyword(e.target.value.trim());
+      searchHospitalsKeyword(normalizeHospitalQuery(e.target.value));
     }
   }, 400)
 );
@@ -942,11 +940,9 @@ document.querySelectorAll(".chip").forEach((chip) => {
     chip.classList.add("is-active");
     activeFilter = chip.dataset.filter;
 
-    const q = searchInput.value.trim() || "동물병원";
-    if (!hasKakaoKey() || !placesService) {
-      renderHospitalList(filterMockByKeyword(filterMockHospitals(activeFilter), q));
-    } else {
-      searchHospitalsKeyword(q);
+    const q = searchInput.value.trim();
+    if (hasKakaoKey() && placesService) {
+      searchHospitalsKeyword(normalizeHospitalQuery(q));
     }
   });
 });
