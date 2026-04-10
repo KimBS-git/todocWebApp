@@ -282,9 +282,36 @@ let homeMarkers = [];
 let homeInfoWindow = null;
 let homeMapResizeBound = false;
 let homeMapLifecycleBound = false;
+let homeMapResizeObserver = null;
 
 /** 서울시청 중심 — 홈 지도는 GPS 없이 고정 (페이지 전환 시에도 즉시 동일 표시) */
 const HOME_MAP_CENTER_LATLNG = { lat: 37.5665, lng: 126.978 };
+
+/**
+ * 부모가 display:none이었다가 막 풀린 직후에는 컨테이너 크기가 0인 채로
+ * kakao.maps.Map이 생성되면 타일이 영원히 회색으로 남습니다. 레이아웃이 잡힐 때까지 대기합니다.
+ */
+function waitForHomeMapContainerReady(container) {
+  return new Promise((resolve) => {
+    let frames = 0;
+    const maxFrames = 90;
+    const tick = () => {
+      const w = container.offsetWidth;
+      const h = container.offsetHeight;
+      if (w > 1 && h > 1) {
+        resolve();
+        return;
+      }
+      frames += 1;
+      if (frames >= maxFrames) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(tick));
+  });
+}
 
 function hasKakaoKey() {
   return (
@@ -327,10 +354,20 @@ function hideHomeMapFallback() {
 }
 
 function clearHomeMarkers() {
-  homeMarkers.forEach((m) => m.setMap(null));
+  homeMarkers.forEach((m) => {
+    try {
+      m.setMap(null);
+    } catch {
+      /* 지도 인스턴스가 이미 해제된 경우 */
+    }
+  });
   homeMarkers = [];
   if (homeInfoWindow) {
-    homeInfoWindow.close();
+    try {
+      homeInfoWindow.close();
+    } catch {
+      /* ignore */
+    }
     homeInfoWindow = null;
   }
 }
@@ -380,7 +417,26 @@ function relayoutHomeMapSoon() {
 function bindHomeMapLifecycle() {
   if (homeMapLifecycleBound) return;
   homeMapLifecycleBound = true;
-  window.addEventListener("pageshow", () => {
+  window.addEventListener("pageshow", (ev) => {
+    if (ev.persisted) {
+      if (homeMapResizeObserver) {
+        try {
+          homeMapResizeObserver.disconnect();
+        } catch {
+          /* ignore */
+        }
+        homeMapResizeObserver = null;
+      }
+      homeMapInitialized = false;
+      homeMap = null;
+      homePlaces = null;
+      clearHomeMarkers();
+      const c = document.getElementById("home-map-container");
+      if (c) c.innerHTML = "";
+      hideHomeMapFallback();
+      initHomeMapOnce();
+      return;
+    }
     if (!homeMap) return;
     relayoutHomeMapSoon();
     [50, 200, 500].forEach((ms) => {
@@ -417,6 +473,7 @@ function applyHomeKeywordResults(data, st) {
   });
   homeMap.setBounds(bounds);
   relayoutHomeMapSoon();
+  setTimeout(() => homeMap && homeMap.relayout(), 100);
 }
 
 function runHomeHospitalSearch(latlng) {
@@ -453,6 +510,8 @@ async function initHomeMapOnce() {
       return;
     }
 
+    await waitForHomeMapContainerReady(container);
+
     const defaultCenter = new kakao.maps.LatLng(
       HOME_MAP_CENTER_LATLNG.lat,
       HOME_MAP_CENTER_LATLNG.lng,
@@ -465,6 +524,20 @@ async function initHomeMapOnce() {
     bindHomeMapResize();
     bindHomeMapLifecycle();
 
+    if (typeof ResizeObserver !== "undefined") {
+      if (homeMapResizeObserver) {
+        try {
+          homeMapResizeObserver.disconnect();
+        } catch {
+          /* ignore */
+        }
+      }
+      homeMapResizeObserver = new ResizeObserver(() => {
+        if (homeMap) homeMap.relayout();
+      });
+      homeMapResizeObserver.observe(container);
+    }
+
     if (kakao.maps.event && kakao.maps.event.addListener) {
       kakao.maps.event.addListener(homeMap, "tilesloaded", () => {
         relayoutHomeMapSoon();
@@ -476,10 +549,20 @@ async function initHomeMapOnce() {
       setTimeout(() => homeMap && homeMap.relayout(), ms);
     });
 
-    runHomeHospitalSearch(defaultCenter);
-    relayoutHomeMapSoon();
-    [100, 400].forEach((ms) => {
-      setTimeout(() => homeMap && homeMap.relayout(), ms);
+    if (statusEl) {
+      statusEl.textContent = "서울시청 중심 주변 동물병원을 표시합니다.";
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!homeMap || !homePlaces) return;
+        homeMap.relayout();
+        runHomeHospitalSearch(defaultCenter);
+        relayoutHomeMapSoon();
+        [100, 300, 600].forEach((ms) => {
+          setTimeout(() => homeMap && homeMap.relayout(), ms);
+        });
+      });
     });
 
     homeMapInitialized = true;

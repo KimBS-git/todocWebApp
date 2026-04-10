@@ -286,7 +286,8 @@
   width: 100%;
   margin-bottom: 12px;
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  /* overflow:hidden은 카카오맵 타일 레이어와 충돌해 회색만 보일 수 있어 visible 유지 */
+  overflow: visible;
 }
 
 .map-wrap--home #home-map-container {
