@@ -66,9 +66,15 @@ function ddayBadge(isoDatetime) {
   const diff = Math.round((target - today) / (1000 * 60 * 60 * 24));
 
   if (diff === 0)
-    return { text: "D-Day", className: "res-card__badge res-card__badge--dday" };
+    return {
+      text: "D-Day",
+      className: "res-card__badge res-card__badge--dday",
+    };
   if (diff > 0)
-    return { text: `D-${diff}`, className: "res-card__badge res-card__badge--d7" };
+    return {
+      text: `D-${diff}`,
+      className: "res-card__badge res-card__badge--d7",
+    };
 
   // 이미 지난 예약
   return { text: "종료", className: "res-card__badge res-card__badge--d7" };
@@ -194,12 +200,12 @@ function formatShortDate(iso) {
   const d = new Date(iso);
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 
-  const yy  = String(d.getFullYear()).slice(2);          // 연도 두 자리
-  const mm  = String(d.getMonth() + 1).padStart(2, "0"); // 월 두 자리
-  const dd  = String(d.getDate()).padStart(2, "0");       // 일 두 자리
-  const day = weekdays[d.getDay()];                       // 요일 한글
-  const hh  = String(d.getHours()).padStart(2, "0");      // 시 두 자리
-  const min = String(d.getMinutes()).padStart(2, "0");    // 분 두 자리
+  const yy = String(d.getFullYear()).slice(2); // 연도 두 자리
+  const mm = String(d.getMonth() + 1).padStart(2, "0"); // 월 두 자리
+  const dd = String(d.getDate()).padStart(2, "0"); // 일 두 자리
+  const day = weekdays[d.getDay()]; // 요일 한글
+  const hh = String(d.getHours()).padStart(2, "0"); // 시 두 자리
+  const min = String(d.getMinutes()).padStart(2, "0"); // 분 두 자리
 
   return `${yy}.${mm}.${dd} (${day}) ${hh}:${min}`;
 }
@@ -277,30 +283,13 @@ let homeInfoWindow = null;
 let homeMapResizeBound = false;
 let homeMapLifecycleBound = false;
 
-const TODOC_GEO_KEY = "todoc_geo_v1";
-
-function readGeoCache() {
-  try {
-    const raw = sessionStorage.getItem(TODOC_GEO_KEY);
-    if (!raw) return null;
-    const o = JSON.parse(raw);
-    if (typeof o.lat === "number" && typeof o.lng === "number") return o;
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-function writeGeoCache(coords) {
-  try {
-    sessionStorage.setItem(TODOC_GEO_KEY, JSON.stringify(coords));
-  } catch {
-    /* ignore */
-  }
-}
+/** 서울시청 중심 — 홈 지도는 GPS 없이 고정 (페이지 전환 시에도 즉시 동일 표시) */
+const HOME_MAP_CENTER_LATLNG = { lat: 37.5665, lng: 126.978 };
 
 function hasKakaoKey() {
-  return typeof CONFIG.KAKAO_APP_KEY === "string" && CONFIG.KAKAO_APP_KEY.length > 10;
+  return (
+    typeof CONFIG.KAKAO_APP_KEY === "string" && CONFIG.KAKAO_APP_KEY.length > 10
+  );
 }
 
 function loadKakaoScript() {
@@ -344,38 +333,6 @@ function clearHomeMarkers() {
     homeInfoWindow.close();
     homeInfoWindow = null;
   }
-}
-
-/**
- * 위치 좌표. 홈에서는 항상 브라우저에 요청(권한 안내). 검색 페이지는 sessionStorage 캐시를 먼저 씁니다.
- */
-function getUserCoordsOrDefault(options = {}) {
-  const preferSessionCache = options.preferSessionCache === true;
-  const forceFresh = options.forceFresh === true;
-  if (preferSessionCache && !forceFresh) {
-    const c = readGeoCache();
-    if (c) return Promise.resolve({ lat: c.lat, lng: c.lng });
-  }
-  return new Promise((resolve) => {
-    const fallback = readGeoCache() || { lat: 37.5665, lng: 126.978 };
-    if (!navigator.geolocation) {
-      resolve(fallback);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const o = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        writeGeoCache(o);
-        resolve(o);
-      },
-      () => resolve(readGeoCache() || fallback),
-      {
-        enableHighAccuracy: true,
-        timeout: 12000,
-        maximumAge: forceFresh ? 0 : 60000,
-      }
-    );
-  });
 }
 
 function homeMapKakaoPlaceToHospital(p, i) {
@@ -467,7 +424,7 @@ function runHomeHospitalSearch(latlng) {
   homePlaces.keywordSearch(
     "동물병원",
     (data, st) => applyHomeKeywordResults(data, st),
-    { location: latlng, radius: 8000 }
+    { location: latlng, radius: 8000 },
   );
 }
 
@@ -478,7 +435,9 @@ async function initHomeMapOnce() {
   await ensureSecretsLoaded();
 
   if (!hasKakaoKey()) {
-    showHomeMapFallback("카카오맵 키를 불러오지 못했습니다. (도메인 등록/환경변수 확인)");
+    showHomeMapFallback(
+      "카카오맵 키를 불러오지 못했습니다. (도메인 등록/환경변수 확인)",
+    );
     if (statusEl) statusEl.textContent = "";
     homeMapInitialized = true;
     return;
@@ -494,8 +453,14 @@ async function initHomeMapOnce() {
       return;
     }
 
-    const defaultCenter = new kakao.maps.LatLng(37.5665, 126.978);
-    homeMap = new kakao.maps.Map(container, { center: defaultCenter, level: 6 });
+    const defaultCenter = new kakao.maps.LatLng(
+      HOME_MAP_CENTER_LATLNG.lat,
+      HOME_MAP_CENTER_LATLNG.lng,
+    );
+    homeMap = new kakao.maps.Map(container, {
+      center: defaultCenter,
+      level: 6,
+    });
     homePlaces = new kakao.maps.services.Places();
     bindHomeMapResize();
     bindHomeMapLifecycle();
@@ -511,34 +476,18 @@ async function initHomeMapOnce() {
       setTimeout(() => homeMap && homeMap.relayout(), ms);
     });
 
-    const coords = await getUserCoordsOrDefault();
-    const center = new kakao.maps.LatLng(coords.lat, coords.lng);
-    homeMap.setCenter(center);
-    if (statusEl) statusEl.textContent = "현 위치 주변 동물병원을 표시합니다.";
-    runHomeHospitalSearch(center);
+    runHomeHospitalSearch(defaultCenter);
     relayoutHomeMapSoon();
     [100, 400].forEach((ms) => {
       setTimeout(() => homeMap && homeMap.relayout(), ms);
     });
 
-    const locateBtn = document.getElementById("btn-home-locate");
-    if (locateBtn && !locateBtn.dataset.bound) {
-      locateBtn.dataset.bound = "1";
-      locateBtn.addEventListener("click", async () => {
-        if (!homeMap || !homePlaces) return;
-        const c = await getUserCoordsOrDefault({ forceFresh: true });
-        const ll = new kakao.maps.LatLng(c.lat, c.lng);
-        homeMap.setCenter(ll);
-        homeMap.setLevel(5);
-        runHomeHospitalSearch(ll);
-        relayoutHomeMapSoon();
-      });
-    }
-
     homeMapInitialized = true;
   } catch (e) {
     console.warn("home map", e);
-    showHomeMapFallback("카카오맵을 불러오지 못했습니다. 도메인 등록을 확인하세요.");
+    showHomeMapFallback(
+      "카카오맵을 불러오지 못했습니다. 도메인 등록을 확인하세요.",
+    );
     if (statusEl) statusEl.textContent = "";
     homeMapInitialized = true;
   }

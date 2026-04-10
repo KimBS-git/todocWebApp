@@ -468,7 +468,8 @@ async function initMapOnce() {
       });
     }
 
-    statusEl.textContent = "지도를 불러오는 중… 위치를 확인하면 주변 병원으로 맞춥니다.";
+    statusEl.textContent =
+      "지도를 불러오는 중… 위치를 확인하면 주변 병원으로 맞춥니다.";
 
     searchHospitalsKeyword("동물병원");
     relayoutSearchMapSoon();
@@ -481,8 +482,6 @@ async function initMapOnce() {
       const ll = new kakao.maps.LatLng(coords.lat, coords.lng);
       kakaoMap.setCenter(ll);
       kakaoMap.setLevel(5);
-      statusEl.textContent =
-        "현 위치 주변 동물병원을 표시합니다. 검색어를 입력해 찾아보세요.";
       const q = normalizeHospitalQuery(
         document.getElementById("hospital-search-input").value,
       );
