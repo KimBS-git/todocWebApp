@@ -217,11 +217,13 @@
           <!-- 보호자 전화번호 (required: 필수 입력 항목) -->
           <div class="form-group">
             <label for="book-phone">보호자 전화번호</label>
-            <input type="text" id="book-phone" required placeholder="010-0000-0000" />
+            <input type="text" id="book-phone" required placeholder="010-0000-0000" autocomplete="tel" />
+            <p id="book-phone-error" class="form-error hidden" role="alert">
+              '010-0000-0000' 형식으로 입력해주세요
+            </p>
           </div>
 
-          <!-- 제출: 실제 예약이 아닌 localStorage 저장 데모 -->
-          <button type="submit" class="btn-primary">예약 완료 (목업)</button>
+          <button type="submit" class="btn-primary">예약 완료</button>
         </form>
       </div>
     </div><!-- /modal-book -->

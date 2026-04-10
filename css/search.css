@@ -623,3 +623,13 @@ img {
   background: #f3f4f6;
   margin-top: 8px;
 }
+
+.form-error {
+  font-size: 0.75rem;
+  color: var(--color-danger);
+  margin: 6px 0 0;
+}
+
+.form-error.hidden {
+  display: none !important;
+}

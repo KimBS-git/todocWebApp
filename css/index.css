@@ -514,6 +514,16 @@ img {
   margin-bottom: 20px;
 }
 
+.upcoming-card--clickable {
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.upcoming-card--clickable:hover {
+  box-shadow: var(--shadow-card);
+  border-color: var(--color-primary);
+}
+
 /* 예약 카드 왼쪽 아이콘 박스 (달력 이모지 배경) */
 .upcoming-card__icon {
   width: 44px;

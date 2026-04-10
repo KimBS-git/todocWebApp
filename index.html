@@ -70,11 +70,6 @@
               회원가입
             </button>
           </form>
-
-          <!-- 데모용 관리자 계정 안내 (admin / admin) -->
-          <p class="auth-switch">
-            관리자 데모: <strong>admin</strong> / <strong>admin</strong>
-          </p>
         </div><!-- /login-panel -->
 
         <!-- ── 회원가입 패널 ──────────────────────────────────────────
@@ -187,7 +182,7 @@
           </a>
         </nav>
 
-        <!-- 알림 벨: 클릭 시 "알림 없음" alert (데모용) -->
+        <!-- 알림 벨 -->
         <button type="button" class="top-nav__bell" id="btn-dummy-noti" title="알림">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
             <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
@@ -232,7 +227,7 @@
         <!-- 이전 예약 섹션 헤더 + 전체보기 링크 (book.html로 이동) -->
         <div class="prev-section-head mt-8">
           <h2><span>🕐</span> 이전 예약 내역</h2>
-          <a href="book.html" class="link-all">전체보기 →</a>
+          <a href="book.html?tab=past" class="link-all">전체보기 →</a>
         </div>
 
         <!-- 이전 예약 미니 카드 영역

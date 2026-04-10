@@ -34,39 +34,6 @@ const STORAGE_SESSION = "todoc_session_v1"; // 현재 로그인한 사용자 아
  * tags 배열: 필터 칩(all·24h·emergency·weekend·open)과 매핑됩니다.
  * x: 경도(longitude), y: 위도(latitude) — 카카오맵 좌표 형식
  * ============================================================================= */
-const MOCK_VET_HOSPITALS = [
-  {
-    id: "mock-h1",
-    place_name: "행복 동물병원",
-    address_name: "서울 강남구 테헤란로 123",
-    road_address_name: "서울 강남구 테헤란로 123",
-    phone: "02-1234-5678",
-    x: "127.027619",
-    y: "37.497942",
-    tags: ["all", "open"],
-  },
-  {
-    id: "mock-h2",
-    place_name: "하이유 동물병원",
-    address_name: "서울 서초구 서초대로 456",
-    road_address_name: "서울 서초구 서초대로 456",
-    phone: "02-9876-5432",
-    x: "127.024612",
-    y: "37.494850",
-    tags: ["all", "weekend", "open"],
-  },
-  {
-    id: "mock-h3",
-    place_name: "24시 응급 동물의료센터",
-    address_name: "서울 송파구 올림픽로 789",
-    road_address_name: "서울 송파구 올림픽로 789",
-    phone: "02-5555-1111",
-    x: "127.105399",
-    y: "37.514575",
-    tags: ["all", "24h", "emergency", "open"],
-  },
-];
-
 /* =============================================================================
  * [전역 상태] 카카오맵 관련 변수
  * 여러 파일에서 공유하므로 전역 스코프에 선언합니다.
@@ -169,37 +136,10 @@ function saveUsers(users) {
 }
 
 /* =============================================================================
- * [초기화] 최초 실행 시 시드 데이터 생성
- * 앱을 처음 열면 관리자 계정(admin/admin)과 샘플 예약을 자동으로 생성합니다.
- * 이미 데이터가 있으면 덮어쓰지 않습니다(early return).
+ * [초기화] 사용자 저장소가 없으면 빈 객체로 초기화합니다.
  * ============================================================================= */
-function seedInitialUsers() {
-  if (loadUsers()) return; // 이미 데이터가 있으면 스킵
-
-  const users = {
-    admin: {
-      password: "admin",
-      isAdmin: true,
-      displayName: "김보호자님",
-      email: "petlover@example.com",
-      // 관리자도 일반 사용자처럼 반려동물은 빈 상태에서 시작
-      pets: [],
-      reservations: [
-        {
-          id: "res-seed-1",
-          hospitalName: "행복 동물병원",
-          address: "서울 강남구 테헤란로 123",
-          phone: "02-1234-5678",
-          petName: "뭉치",
-          reason: "정기검진",
-          datetime: "2026-04-07T11:33",
-          placeId: "seed",
-        },
-      ],
-    },
-  };
-
-  saveUsers(users);
+function ensureUsersStorage() {
+  if (!loadUsers()) saveUsers({});
 }
 
 /* =============================================================================
@@ -276,7 +216,7 @@ function saveCurrentUserData(data) {
  * @returns {boolean} 로그인 성공 여부
  */
 function handleLogin(username, password) {
-  seedInitialUsers(); // 최초 실행 시 관리자 계정이 없으면 자동 생성
+  ensureUsersStorage();
 
   const users = loadUsers();
 
@@ -307,7 +247,7 @@ function handleLogin(username, password) {
  * @returns {boolean} 회원가입 성공 여부
  */
 function handleSignup(username, password) {
-  seedInitialUsers();
+  ensureUsersStorage();
 
   const users = loadUsers() || {};
 
@@ -317,12 +257,12 @@ function handleSignup(username, password) {
     return false;
   }
 
-  // 새 사용자 객체 생성 (isAdmin: false, pets·reservations 빈 배열로 시작)
   users[username] = {
     password,
     isAdmin: false,
-    displayName: `${username}님`,        // 기본 표시 이름: "아이디님"
-    email: `${username}@example.com`,    // 기본 이메일 (데모용)
+    displayName: `${username}님`,
+    email: `${username}@example.com`,
+    phone: "",
     pets: [],
     reservations: [],
   };
@@ -414,135 +354,6 @@ function ddayBadge(isoDatetime) {
   return { text: "종료", className: "res-card__badge res-card__badge--d7" };
 }
 
-/* =============================================================================
- * [기능] 예약 추가
- * 현재 사용자의 예약 목록에 새 예약 레코드를 추가하고 localStorage에 저장합니다.
- * ============================================================================= */
-
-/**
- * @param {{ id, hospitalName, address, petName, reason, datetime, placeId }} record
- */
-function addReservation(record) {
-  const user = getCurrentUser();
-  if (!user) return;
-
-  const list = [...(user.reservations || []), record]; // 기존 목록에 추가
-  saveCurrentUserData({ reservations: list });
-}
-
-/* =============================================================================
- * [UI] 예약내역 페이지 전체 렌더링
- * "예정된 예약" 탭과 "지난 예약" 탭의 내용을 각각 채웁니다.
- * ============================================================================= */
-function renderReservationPage() {
-  const user = getCurrentUser();
-  if (!user) return;
-
-  const { upcoming, past } = splitReservationsByTime(user.reservations || []);
-
-  const elUp   = document.getElementById("res-list-upcoming");
-  const elPast = document.getElementById("res-list-past");
-
-  // 예정된 예약: 카드 목록 또는 빈 상태 메시지
-  elUp.innerHTML = upcoming.length
-    ? upcoming.map((r) => resCardHtml(r, true)).join("")
-    : `<div class="empty-state">예정된 예약이 없습니다.</div>`;
-
-  // 지난 예약: D-day 뱃지 없이 카드 렌더링
-  elPast.innerHTML = past.length
-    ? past.map((r) => resCardHtml(r, false)).join("")
-    : `<div class="empty-state">지난 예약이 없습니다.</div>`;
-
-  // innerHTML로 DOM이 교체되므로 매번 이벤트 재바인딩
-  bindReservationActions();
-}
-
-/* =============================================================================
- * [UI] 예약 카드 버튼 이벤트
- * - 상세보기: 데모 알림
- * - 재예약/후기작성: 데모 알림
- * - 예약취소: 현재 사용자 예약 목록에서 해당 id 제거(데모)
- * ============================================================================= */
-function bindReservationActions() {
-  document.querySelectorAll(".btn-res-detail").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      alert("데모: 상세보기는 연결되지 않았습니다.");
-    });
-  });
-
-  document.querySelectorAll(".btn-res-rebook").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      alert("데모: 재예약은 연결되지 않았습니다.");
-    });
-  });
-
-  document.querySelectorAll(".btn-res-review").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      alert("데모: 후기작성은 연결되지 않았습니다.");
-    });
-  });
-
-  document.querySelectorAll(".btn-res-cancel").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-id");
-      if (!id) return;
-      if (!confirm("예약을 취소할까요?")) return;
-      const user = getCurrentUser();
-      if (!user) return;
-      const next = (user.reservations || []).filter((r) => String(r.id) !== String(id));
-      saveCurrentUserData({ reservations: next });
-      renderReservationPage();
-    });
-  });
-}
-
-/* =============================================================================
- * [UI] 예약 카드 HTML 생성
- * 하나의 예약 레코드를 카드 HTML 문자열로 변환합니다.
- * showDday가 true이면 D-day 뱃지를 포함합니다.
- * ============================================================================= */
-
-/**
- * @param {{ id, hospitalName, petName, reason, datetime }} r - 예약 레코드
- * @param {boolean} showDday - D-day 뱃지 표시 여부 (예정된 예약만 true)
- * @returns {string} HTML 문자열
- */
-function resCardHtml(r, showDday) {
-  const badge = showDday ? ddayBadge(r.datetime) : null;
-  const pet = r.petName || "—";
-  const dtText = r.datetime ? r.datetime.replace("T", " ") : "";
-
-  return `
-    <article class="res-card">
-      <div class="res-card__top">
-        <div class="res-card__icon">+</div>
-        <div class="res-card__info">
-          <h3>${escapeHtml(r.hospitalName)}</h3>
-          <p class="sub">${escapeHtml(pet)} · ${escapeHtml(r.reason || "")}</p>
-        </div>
-        <div class="res-card__right">
-          <div class="res-card__date">${escapeHtml(dtText)}</div>
-          ${badge ? `<div class="${badge.className} res-card__badge--stacked">${badge.text}</div>` : ""}
-        </div>
-      </div>
-      <div class="res-card__divider"></div>
-      <div class="res-card__bottom">
-        ${
-          showDday
-            ? `
-              <div class="res-card__actions">
-                <button type="button" class="res-card__action btn-res-detail" data-id="${escapeHtml(r.id)}">상세보기</button>
-                <button type="button" class="res-card__action btn-res-cancel" data-id="${escapeHtml(r.id)}">예약취소</button>
-              </div>`
-            : `
-              <div class="res-card__actions">
-                <button type="button" class="res-card__action btn-res-rebook" data-id="${escapeHtml(r.id)}">재예약</button>
-                <button type="button" class="res-card__action btn-res-review" data-id="${escapeHtml(r.id)}">후기작성</button>
-              </div>`
-        }
-      </div>
-    </article>`;
-}
 /**
  * home.js — 홈 페이지 렌더링 및 날짜 포매팅 유틸
  *
@@ -577,7 +388,7 @@ function renderHome() {
     const badge = ddayBadge(u.datetime);
 
     upcomingWrap.innerHTML = `
-      <div class="upcoming-card">
+      <div class="upcoming-card upcoming-card--clickable" role="button" tabindex="0" title="예약내역으로 이동">
         <div class="upcoming-card__icon">📅</div>
         <div class="upcoming-card__meta">
           <h3>${escapeHtml(u.hospitalName)}</h3>
@@ -585,6 +396,19 @@ function renderHome() {
         </div>
         <div class="dday-badge">${badge.text}<span>${formatDdayPlus(u.datetime)}</span></div>
       </div>`;
+    const cardEl = upcomingWrap.querySelector(".upcoming-card--clickable");
+    if (cardEl) {
+      const go = () => {
+        window.location.href = "book.html?tab=upcoming";
+      };
+      cardEl.addEventListener("click", go);
+      cardEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          go();
+        }
+      });
+    }
   } else {
     upcomingWrap.innerHTML = `
       <p class="empty-state" style="padding:20px">예정된 예약이 없습니다.</p>`;
@@ -670,7 +494,7 @@ function formatShortDate(iso) {
  * index.html — 페이지 초기화 (인라인 스크립트 통합)
  * ============================================================================= */
 (function bootIndex() {
-  seedInitialUsers();
+  ensureUsersStorage();
 
   if (getSession() && getCurrentUser()) {
     document.getElementById("auth-screen").classList.add("hidden");
@@ -721,7 +545,7 @@ document.getElementById("btn-goto-search").addEventListener("click", () => {
 });
 
 document.getElementById("btn-dummy-noti").addEventListener("click", () => {
-  alert("데모: 알림이 없습니다.");
+  alert("알림이 없습니다.");
 });
 
 function readyMessage(serviceName) {
