@@ -199,6 +199,16 @@
         <!-- 빈 헤더 (추후 사용자 인사말 등 추가 가능) -->
         <div class="home-header"></div>
 
+        <!-- 지도 느낌 가상 이미지(장식) — 실제 지도 API 없음 -->
+        <div
+          class="home-map-visual"
+          role="img"
+          aria-label="병원 검색 지도 안내 이미지"
+        >
+          <div class="home-map-visual__fake" aria-hidden="true"></div>
+          <span class="home-map-visual__pin" aria-hidden="true">📍</span>
+        </div>
+
         <!-- 병원검색 페이지(search.html)로 이동하는 CTA 버튼 -->
         <button type="button" class="btn-map-cta" id="btn-goto-search">
           지도에서 병원 찾기

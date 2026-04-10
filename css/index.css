@@ -250,11 +250,12 @@
 /* ============================================================
    home.css — 홈 페이지 스타일 (#page-home)
    구성 요소:
-     1. "지도에서 병원 찾기" CTA 버튼
-     2. 빠른 서비스 4종 2×2 그리드
-     3. 다가오는 예약 카드 (D-day 뱃지 포함)
-     4. 이전 예약 간략 목록
-     5. 나의 반려동물 카드 (하단)
+     1. 가상 지도 시각(장식)
+     2. "지도에서 병원 찾기" CTA 버튼
+     3. 빠른 서비스 4종 가로 소형 배치
+     4. 다가오는 예약 카드 (D-day 뱃지 포함)
+     5. 이전 예약 간략 목록
+     6. 나의 반려동물 카드 (하단)
    ============================================================ */
 
 /* ─── 홈 상단 헤더 영역 ──────────────────────────────────────
@@ -264,6 +265,66 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+/* ─── 가상 지도 이미지(장식, API 없음) ─────────────────────── */
+.home-map-visual {
+  position: relative;
+  width: 100%;
+  height: min(200px, 32vw);
+  min-height: 140px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 12px;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+  background: linear-gradient(165deg, #dbeafe 0%, #e0f2fe 45%, #d1fae5 100%);
+}
+
+.home-map-visual__fake {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.45) 0 1px,
+      transparent 1px 36px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.45) 0 1px,
+      transparent 1px 36px
+    ),
+    linear-gradient(
+      90deg,
+      transparent 46%,
+      rgba(148, 163, 184, 0.22) 46%,
+      rgba(148, 163, 184, 0.22) 54%,
+      transparent 54%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 38%,
+      rgba(148, 163, 184, 0.18) 38%,
+      rgba(148, 163, 184, 0.18) 42%,
+      transparent 42%
+    ),
+    radial-gradient(
+      ellipse 120% 80% at 70% 30%,
+      rgba(167, 243, 208, 0.55) 0%,
+      transparent 55%
+    );
+}
+
+.home-map-visual__pin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -58%);
+  font-size: clamp(1.75rem, 6vw, 2.25rem);
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.25));
+  pointer-events: none;
 }
 
 /* ─── 병원 검색 CTA 버튼 ─────────────────────────────────────
@@ -281,31 +342,40 @@
 }
 
 /* ─── 빠른 서비스 섹션 ────────────────────────────────────────
-   미용·호텔·동물카페·용품샵 4개 항목을 2×2 그리드로 배열합니다. */
+   미용·호텔·동물카페·용품샵 4개 항목을 한 줄 가로·소형으로 배열합니다. */
 .quick-services h2 {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 800;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
 }
 
-/* 2×2 그리드 */
 .quick-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 6px;
+  justify-content: space-between;
 }
 
-/* 개별 서비스 아이템: 정사각형(aspect-ratio:1)으로 유지 */
 .quick-item {
-  aspect-ratio: 1;
+  flex: 1 1 0;
+  min-width: 0;
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  font-size: 1.3rem;
+  gap: 2px;
+  padding: 8px 4px;
+  font-size: 0.68rem;
   font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.quick-item span {
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
 /* 서비스 아이템별 테마 색상 */
