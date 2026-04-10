@@ -342,9 +342,9 @@
 }
 
 /* ─── 빠른 서비스 섹션 ────────────────────────────────────────
-   미용·호텔·동물카페·용품샵 4개 항목을 한 줄 가로·소형으로 배열합니다. */
+   미용·호텔·동물카페·용품샵 4개 항목을 한 줄 가로 배치, 각 항목은 정사각형 */
 .quick-services h2 {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 800;
   margin: 0 0 10px;
 }
@@ -355,26 +355,29 @@
   flex-wrap: nowrap;
   gap: 6px;
   justify-content: space-between;
+  align-items: flex-start;
 }
 
 .quick-item {
   flex: 1 1 0;
   min-width: 0;
+  aspect-ratio: 1;
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 8px 4px;
-  font-size: 0.68rem;
+  gap: 4px;
+  padding: 6px;
+  font-size: 0.65rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.15;
   text-align: center;
+  box-sizing: border-box;
 }
 
 .quick-item span {
-  font-size: 1.1rem;
+  font-size: clamp(0.95rem, 3.5vw, 1.2rem);
   line-height: 1;
 }
 

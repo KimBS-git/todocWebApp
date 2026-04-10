@@ -5,6 +5,7 @@
 ---
 
 ## 배포
+
 [todoc_web](https://todocwebapp.vercel.app/)
 
 ---
@@ -27,14 +28,14 @@ todoc_web_app/
 │   ├── book.html          # 예약내역
 │   └── mypage.html        # 마이페이지
 ├── js/
-│   ├── common.js          # 카카오 설정 로드, 스토리지, 로그인/회원가입
-│   ├── index.js           # 홈 로직·홈 지도 미리보기
+│   ├── common.js          # 카카오 설정 로드, 스토리지, 로그인/회원가입, 기본 admin 시드
+│   ├── index.js           # 홈 렌더링(예약·반려동물 카드), 로그인 부트스트랩
 │   ├── search.js          # 병원검색·지도·예약 모달
 │   ├── book.js            # 예약내역 탭·카드·후기
 │   ├── mypage.js          # 프로필·반려동물·로그아웃
 │   └── app.js             # (참고) SPA 안내용, HTML에서 미사용
 ├── images/                # 로고 등 정적 이미지 (예: todoc_logo.png)
-├── vercel.json            # 배포 시 search.js 캐시 헤더 등
+├── vercel.json            # rewrites/redirects, search.js 캐시 헤더
 └── README.md
 ```
 
@@ -46,11 +47,17 @@ todoc_web_app/
 
 ### 홈 (`html/index.html` + `js/index.js`)
 
-**역할:** 비로그인 시 로그인/회원가입 화면, 로그인 후 홈 대시보드(지도 미리보기, 다가오는/이전 예약, 병원검색 이동).
+**역할:** 비로그인 시 로그인/회원가입, 로그인 후 홈 대시보드.
 
-세션·사용자가 있으면 인증 화면을 숨기고 홈을 그립니다.
+- **가상 지도 영역:** CSS로 맵 느낌의 장식 블록(실제 카카오 지도 API 없음).
+- **「지도에서 병원 찾기」:** `search.html`로 이동하는 CTA.
+- **빠른 서비스:** 미용·호텔·동물카페·용품샵 4항목, 가로 한 줄·정사각형 타일.
+- **다가오는 예약 / 이전 예약** 요약 카드.
+- **나의 반려동물:** 마이페이지와 동일 `user.pets` 데이터를 카드로 가로 스크롤, **전체보기**는 `mypage.html`.
 
-```209:217:js/index.js
+세션이 있으면 인증 화면을 숨기고 `renderHome()`만 호출합니다(홈에는 카카오맵 초기화 코드 없음).
+
+```266:274:js/index.js
 (function bootIndex() {
   ensureUsersStorage();
 
@@ -58,31 +65,13 @@ todoc_web_app/
     document.getElementById("auth-screen").classList.add("hidden");
     document.getElementById("main-app").classList.remove("hidden");
     renderHome();
-    initHomeMapOnce();
   }
 })();
 ```
 
-로그인 성공 시에도 동일하게 메인 앱을 표시하고 홈·지도를 초기화합니다.
+`renderHome()`은 예약 요약 후 `renderHomePetsBlock(user)`로 하단 반려동물 영역을 채웁니다.
 
-```220:230:js/index.js
-document.getElementById("form-login").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const id = document.getElementById("login-id").value.trim();
-  const pw = document.getElementById("login-pw").value;
-
-  if (handleLogin(id, pw)) {
-    document.getElementById("auth-screen").classList.add("hidden");
-    document.getElementById("main-app").classList.remove("hidden");
-    renderHome();
-    initHomeMapOnce();
-  }
-});
-```
-
-`renderHome()`은 예정/지난 예약을 나눠 가장 가까운 예약 카드·이전 예약 미니 카드를 DOM에 채웁니다.
-
-```95:104:js/index.js
+```150:226:js/index.js
 function renderHome() {
   const user = getCurrentUser();
   if (!user) return;
@@ -93,17 +82,19 @@ function renderHome() {
      예정된 예약 중 가장 가까운 것 하나를 강조 카드로 표시합니다.
      예약이 없으면 "예정된 예약이 없습니다." 메시지를 표시합니다. */
   const upcomingWrap = document.getElementById("home-upcoming-wrap");
+  // ... 이전 예약 미니 카드 ...
+
+  renderHomePetsBlock(user);
+}
 ```
 
 ---
 
 ### 병원검색 (`html/search.html` + `js/search.js`)
 
-**역할:** 카카오맵 SDK 동적 로드, 현재 위치 기준 Places 키워드 검색, 목록·마커·예약 모달.
+**역할:** 카카오맵 SDK 동적 로드, 위치 기반 Places 키워드 검색, 목록·마커·예약 모달.
 
-키가 없으면 폴백 UI로 안내하고, 있으면 SDK를 불러 `kakao.maps.load` 후 지도를 초기화합니다.
-
-```244:266:js/search.js
+```276:298:js/search.js
 function loadKakaoScript() {
   return new Promise((resolve, reject) => {
     // 이미 SDK가 로드된 경우 바로 resolve
@@ -130,13 +121,7 @@ function loadKakaoScript() {
 }
 ```
 
-키워드로 주변 병원을 검색하는 진입점 예시는 아래와 같습니다. (`placesService`가 초기화된 뒤 호출)
-
-```443:448:js/search.js
- * 카카오 Places API로 실시간 검색합니다.
- *
- * @param {string} keyword - 검색어 (예: "강남 동물병원", "24시")
- */
+```526:527:js/search.js
 function searchHospitalsKeyword(keyword) {
   if (!placesService || !kakaoMap) return;
 ```
@@ -146,8 +131,6 @@ function searchHospitalsKeyword(keyword) {
 ### 예약내역 (`html/book.html` + `js/book.js`)
 
 **역할:** 「예정된 예약」/「지난 예약」 탭, 카드 목록, 상세·취소·후기·재예약 등.
-
-예약을 시각 기준으로 나누고 정렬한 뒤 각 탭 영역에 HTML을 채웁니다.
 
 ```28:45:js/book.js
 function splitReservationsByTime(reservations) {
@@ -242,9 +225,34 @@ function renderMyPage() {
 
 ### 공통 (`js/common.js`)
 
-**역할:** `/api/config`로 카카오 앱 키 주입, `localStorage` 기반 사용자·세션, 로그인/회원가입, 현재 사용자 데이터 갱신.
+**역할:** `/api/config`로 카카오 앱 키 주입, `localStorage` 기반 사용자·세션, 로그인/회원가입, **기본 `admin` 계정 시드**(없을 때만 `admin` / `admin` + 지난 예약 데모 1건).
 
-```83:96:js/common.js
+```61:75:js/common.js
+/** admin 계정이 없을 때만 비밀번호 admin으로 생성 + 지난 예약 데모 1건 */
+function ensureDefaultAdminAccount() {
+  const users = loadUsers();
+  if (!users || users[DEFAULT_ADMIN_ID]) return;
+
+  users[DEFAULT_ADMIN_ID] = {
+    password: DEFAULT_ADMIN_PASSWORD,
+    isAdmin: true,
+    displayName: "관리자",
+    phone: "",
+    pets: [],
+    reservations: [createAdminPastDemoReservation()],
+  };
+  saveUsers(users);
+}
+```
+
+```109:112:js/common.js
+function ensureUsersStorage() {
+  if (!loadUsers()) saveUsers({});
+  ensureDefaultAdminAccount();
+}
+```
+
+```123:136:js/common.js
 function getCurrentUser() {
   const u = getSession();
   if (!u) return null;
@@ -287,8 +295,9 @@ export default function handler(req, res) {
 | 마크업·스타일 | HTML5, CSS3 (페이지별 스타일시트 분리) |
 | 스크립트 | 바닐라 JavaScript (ES6+), 모듈 번들러 없음 |
 | 라우팅 | MPA — 페이지마다 별도 HTML, 링크로 이동 |
-| 데이터 저장 | `localStorage`(사용자·세션·예약·반려동물), `sessionStorage`(위치 캐시 등) |
-| 지도·장소 | 카카오맵 JavaScript API, Places(키워드 검색), `navigator.geolocation` |
+| 데이터 저장 | `localStorage`(사용자·세션·예약·반려동물), `sessionStorage`(검색 페이지 위치 캐시 등) |
+| 지도·장소 | 카카오맵 JavaScript API, Places, `navigator.geolocation` |
 | 폰트 | Pretendard (jsDelivr CDN) |
-| 배포·백엔드 | Vercel Serverless Functions (`/api/config`), `vercel.json` 헤더 설정 |
+| 배포·백엔드 | Vercel Serverless Functions (`/api/config`), `vercel.json`(rewrites·redirects·캐시 헤더) |
+
 
