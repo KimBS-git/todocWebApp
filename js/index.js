@@ -1,288 +1,8 @@
 /**
- * index.js — 홈(로그인) 페이지 번들
- * config + storage + auth + reservations + home + 초기화
- */
-/**
- * config.js — 앱 전역 설정값, 상수, 목업 데이터, 전역 상태 변수
- *
- * 이 파일은 가장 먼저 로드되어야 합니다.
- * 다른 모든 JS 파일이 여기서 선언한 변수를 참조합니다.
+ * index.js — 홈(로그인) 페이지
+ * 의존: common.js (CONFIG, 스토리지, 인증)
  */
 
-/* =============================================================================
- * [설정] 카카오맵 API 키
- * - 배포(Vercel): Environment Variables의 KAKAO_APP_KEY를 /api/config로 주입받아 사용합니다.
- * - 로컬 개발: 필요하면 window.TODOC_SECRETS = { KAKAO_APP_KEY: \"...\" } 형태로 직접 주입할 수 있습니다.
- * ============================================================================= */
-const CONFIG = {
-  get KAKAO_APP_KEY() {
-    const w = typeof window !== "undefined" && window.TODOC_SECRETS;
-    return (w && typeof w.KAKAO_APP_KEY === "string" && w.KAKAO_APP_KEY) || "";
-  },
-};
-
-/* =============================================================================
- * [상수] 로컬 스토리지 키
- * 버전 접미사(_v1)를 붙여 데이터 구조 변경 시 쉽게 마이그레이션할 수 있게 합니다.
- * ============================================================================= */
-const STORAGE_USERS   = "todoc_users_v1";   // 전체 사용자 DB (객체 배열)
-const STORAGE_SESSION = "todoc_session_v1"; // 현재 로그인한 사용자 아이디 (문자열)
-
-/* =============================================================================
- * [상수] 목업 동물병원 데이터
- * 카카오 API 키가 없거나 검색 실패 시 이 데이터를 대신 표시합니다.
- * tags 배열: 필터 칩(all·24h·emergency·weekend·open)과 매핑됩니다.
- * x: 경도(longitude), y: 위도(latitude) — 카카오맵 좌표 형식
- * ============================================================================= */
-/* =============================================================================
- * [전역 상태] 카카오맵 관련 변수
- * 여러 파일에서 공유하므로 전역 스코프에 선언합니다.
- * ============================================================================= */
-
-/** @type {kakao.maps.Map | null} 카카오맵 인스턴스 (초기화 전에는 null) */
-let kakaoMap = null;
-
-/** @type {kakao.maps.Marker[]} 지도에 표시된 마커 배열 (clearMarkers 시 제거) */
-let mapMarkers = [];
-
-/** 카카오 장소 검색 서비스 인스턴스 (keywordSearch에 사용) */
-let placesService = null;
-
-/** 지도가 이미 초기화되었는지 여부 (중복 초기화 방지) */
-let mapInitialized = false;
-
-/** 현재 활성화된 병원 필터 칩 값 ("all" | "24h" | "emergency" | "weekend" | "open") */
-let activeFilter = "all";
-
-/* =============================================================================
- * [유틸] HTML 이스케이프
- * 사용자 입력값을 DOM에 삽입할 때 XSS 공격을 방지합니다.
- * 예: <script>alert(1)</script> → &lt;script&gt;...
- * ============================================================================= */
-function escapeHtml(s) {
-  const d = document.createElement("div");
-  d.textContent = s;   // textContent는 자동으로 HTML 특수문자를 이스케이프합니다.
-  return d.innerHTML;  // 이스케이프된 문자열을 innerHTML로 반환합니다.
-}
-
-/* =============================================================================
- * [유틸] 고유 ID 생성
- * 반려동물·예약 데이터에 고유 식별자를 부여할 때 사용합니다.
- * Date.now(): 밀리초 타임스탬프 (충돌 가능성 줄임)
- * Math.random().toString(36): 36진수 랜덤 문자열 (추가 고유성)
- * ============================================================================= */
-function uid() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-/* =============================================================================
- * [유틸] 디바운스
- * 연속된 이벤트(예: 검색창 입력)에서 마지막 호출 후 ms만큼 대기한 뒤 실행합니다.
- * 검색 API 호출 횟수를 줄여 성능과 비용을 절감합니다.
- * ============================================================================= */
-function debounce(fn, ms) {
-  let timer;
-  return function (...args) {
-    clearTimeout(timer);               // 이전 타이머 취소
-    timer = setTimeout(() => fn.apply(this, args), ms); // 새 타이머 등록
-  };
-}
-/**
- * storage.js — 로컬 스토리지 기반 사용자 DB 관리
- *
- * 데모 앱이므로 서버 없이 브라우저의 localStorage에 모든 데이터를 저장합니다.
- * 실제 서비스에서는 이 계층을 API 호출로 교체해야 합니다.
- *
- * 데이터 구조 (STORAGE_USERS):
- * {
- *   "username": {
- *     password: string,       // ⚠️ 데모용 평문 저장 (실제 서비스에서는 해싱 필요)
- *     isAdmin: boolean,       // 관리자 여부
- *     displayName: string,    // 화면에 표시되는 이름
- *     email: string,
- *     pets: Pet[],            // 반려동물 목록
- *     reservations: Reservation[] // 예약 목록
- *   }
- * }
- *
- * 의존: config.js (STORAGE_USERS, STORAGE_SESSION)
- */
-
-/* =============================================================================
- * [스토리지] 사용자 DB 읽기/쓰기
- * ============================================================================= */
-
-/**
- * localStorage에서 전체 사용자 객체를 불러옵니다.
- * JSON 파싱 실패(데이터 손상 등) 시 null을 반환하고 콘솔에 경고를 출력합니다.
- * @returns {Object|null} 사용자 맵 객체 또는 null
- */
-function loadUsers() {
-  try {
-    const raw = localStorage.getItem(STORAGE_USERS);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.warn("loadUsers 오류:", e);
-  }
-  return null;
-}
-
-/**
- * 사용자 객체를 JSON 직렬화해 localStorage에 저장합니다.
- * @param {Object} users - 전체 사용자 맵 객체
- */
-function saveUsers(users) {
-  localStorage.setItem(STORAGE_USERS, JSON.stringify(users));
-}
-
-/* =============================================================================
- * [초기화] 사용자 저장소가 없으면 빈 객체로 초기화합니다.
- * ============================================================================= */
-function ensureUsersStorage() {
-  if (!loadUsers()) saveUsers({});
-}
-
-/* =============================================================================
- * [세션] 로그인 상태 관리
- * 로그인한 사용자의 username을 sessionStorage 대신 localStorage에 저장합니다.
- * (탭 닫아도 로그인 상태 유지 — 브라우저 재시작까지)
- * ============================================================================= */
-
-/**
- * 현재 세션(로그인한 사용자 아이디)을 반환합니다.
- * @returns {string|null}
- */
-function getSession() {
-  return localStorage.getItem(STORAGE_SESSION);
-}
-
-/**
- * 세션을 설정하거나 제거합니다.
- * @param {string|null} username - null 전달 시 로그아웃(세션 삭제)
- */
-function setSession(username) {
-  if (username) localStorage.setItem(STORAGE_SESSION, username);
-  else localStorage.removeItem(STORAGE_SESSION);
-}
-
-/* =============================================================================
- * [현재 사용자] 세션 기반 사용자 데이터 조회/갱신
- * ============================================================================= */
-
-/**
- * 현재 로그인한 사용자의 전체 데이터를 반환합니다.
- * 세션이 없거나 사용자 데이터가 없으면 null을 반환합니다.
- * username 필드를 추가로 붙여서 반환합니다.
- * @returns {{ username: string, password: string, isAdmin: boolean, pets: Array, reservations: Array, ... }|null}
- */
-function getCurrentUser() {
-  const u = getSession();
-  if (!u) return null;
-  const users = loadUsers();
-  return users && users[u] ? { username: u, ...users[u] } : null;
-}
-
-/**
- * 현재 로그인한 사용자의 데이터 일부를 갱신합니다.
- * 기존 데이터에 data 객체를 스프레드로 병합합니다.
- * 예: saveCurrentUserData({ pets: [...] }) → pets만 업데이트
- * @param {Object} data - 갱신할 필드들
- */
-function saveCurrentUserData(data) {
-  const u = getSession();
-  if (!u) return;
-  const users = loadUsers() || {};
-  users[u] = { ...users[u], ...data }; // 얕은 병합(shallow merge)
-  saveUsers(users);
-}
-/**
- * auth.js — 인증 기능 (로그인 / 회원가입 / 로그아웃)
- *
- * 의존: config.js, storage.js
- *
- * 실제 서비스라면 이 파일의 함수들이 서버 API를 호출해야 합니다.
- * 현재는 데모용으로 localStorage에 평문 비밀번호를 저장합니다.
- */
-
-/* =============================================================================
- * [기능] 로그인
- * 입력한 아이디/비밀번호를 localStorage의 사용자 DB와 비교합니다.
- * 성공 시 세션을 설정하고 true를 반환, 실패 시 alert 후 false를 반환합니다.
- * ============================================================================= */
-
-/**
- * @param {string} username - 입력된 아이디
- * @param {string} password - 입력된 비밀번호 (평문)
- * @returns {boolean} 로그인 성공 여부
- */
-function handleLogin(username, password) {
-  ensureUsersStorage();
-
-  const users = loadUsers();
-
-  // 아이디가 존재하지 않는 경우
-  if (!users || !users[username]) {
-    alert("아이디 또는 비밀번호가 올바르지 않습니다.");
-    return false;
-  }
-
-  // 비밀번호가 일치하지 않는 경우 (보안상 아이디/비밀번호 오류를 동일 메시지로 처리)
-  if (users[username].password !== password) {
-    alert("아이디 또는 비밀번호가 올바르지 않습니다.");
-    return false;
-  }
-
-  setSession(username); // 로그인 성공: 세션 저장
-  return true;
-}
-
-/* =============================================================================
- * [기능] 회원가입
- * 새 계정을 사용자 DB에 추가하고 자동으로 로그인 처리합니다.
- * ============================================================================= */
-
-/**
- * @param {string} username - 사용할 아이디 (중복 불가)
- * @param {string} password - 사용할 비밀번호 (최소 4자, HTML 검증)
- * @returns {boolean} 회원가입 성공 여부
- */
-function handleSignup(username, password) {
-  ensureUsersStorage();
-
-  const users = loadUsers() || {};
-
-  // 아이디 중복 검사
-  if (users[username]) {
-    alert("이미 사용 중인 아이디입니다.");
-    return false;
-  }
-
-  users[username] = {
-    password,
-    isAdmin: false,
-    displayName: `${username}님`,
-    email: `${username}@example.com`,
-    phone: "",
-    pets: [],
-    reservations: [],
-  };
-
-  saveUsers(users);
-  setSession(username); // 가입 즉시 로그인 처리
-  alert("회원가입이 완료되었습니다.");
-  return true;
-}
-
-/* =============================================================================
- * [기능] 로그아웃
- * 세션을 삭제하고 로그인 화면으로 전환합니다.
- * ============================================================================= */
-function logout() {
-  setSession(null); // 세션 삭제
-
-  // MPA 방식: 로그인 페이지(index.html)로 이동합니다.
-  window.location.href = "index.html";
-}
 /**
  * reservations.js — 예약 관련 데이터 처리 및 예약내역 페이지 렌더링
  *
@@ -386,6 +106,10 @@ function renderHome() {
   if (upcoming.length) {
     const u = upcoming[0]; // 가장 가까운 예약
     const daysLeft = daysUntilAppointment(u.datetime);
+    const ddayNumHtml =
+      daysLeft === 0
+        ? '<span class="dday-badge__num dday-badge__num--today">D-day</span>'
+        : `<span class="dday-badge__num">${daysLeft}</span>`;
 
     upcomingWrap.innerHTML = `
       <div class="upcoming-card upcoming-card--clickable" role="button" tabindex="0" title="예약내역으로 이동">
@@ -396,7 +120,7 @@ function renderHome() {
         </div>
         <div class="dday-badge">
           <span class="dday-badge__label">D-Day</span>
-          <span class="dday-badge__num">${daysLeft}</span>
+          ${ddayNumHtml}
         </div>
       </div>`;
     const cardEl = upcomingWrap.querySelector(".upcoming-card--clickable");
@@ -574,24 +298,6 @@ function writeGeoCache(coords) {
   }
 }
 
-async function ensureSecretsLoaded() {
-  if (typeof window === "undefined") return;
-  if (window.TODOC_SECRETS && typeof window.TODOC_SECRETS.KAKAO_APP_KEY === "string" && window.TODOC_SECRETS.KAKAO_APP_KEY) {
-    return;
-  }
-  try {
-    const r = await fetch("/api/config", { cache: "no-store" });
-    if (!r.ok) return;
-    const data = await r.json();
-    window.TODOC_SECRETS = {
-      ...(window.TODOC_SECRETS || {}),
-      KAKAO_APP_KEY: typeof data.KAKAO_APP_KEY === "string" ? data.KAKAO_APP_KEY : "",
-    };
-  } catch {
-    // 로컬에서는 /api/config가 없을 수 있음
-  }
-}
-
 function hasKakaoKey() {
   return typeof CONFIG.KAKAO_APP_KEY === "string" && CONFIG.KAKAO_APP_KEY.length > 10;
 }
@@ -759,8 +465,6 @@ async function initHomeMapOnce() {
     return;
   }
 
-  const coords = await getUserCoordsOrDefault();
-
   try {
     await loadKakaoScript();
     hideHomeMapFallback();
@@ -771,13 +475,23 @@ async function initHomeMapOnce() {
       return;
     }
 
-    const center = new kakao.maps.LatLng(coords.lat, coords.lng);
-    homeMap = new kakao.maps.Map(container, { center, level: 6 });
+    const defaultCenter = new kakao.maps.LatLng(37.5665, 126.978);
+    homeMap = new kakao.maps.Map(container, { center: defaultCenter, level: 6 });
     homePlaces = new kakao.maps.services.Places();
     bindHomeMapResize();
 
-    if (statusEl) statusEl.textContent = "현 위치 주변 동물병원을 표시합니다.";
+    if (kakao.maps.event && kakao.maps.event.addListener) {
+      kakao.maps.event.addListener(homeMap, "tilesloaded", () => {
+        relayoutHomeMapSoon();
+      });
+    }
 
+    relayoutHomeMapSoon();
+
+    const coords = await getUserCoordsOrDefault();
+    const center = new kakao.maps.LatLng(coords.lat, coords.lng);
+    homeMap.setCenter(center);
+    if (statusEl) statusEl.textContent = "현 위치 주변 동물병원을 표시합니다.";
     runHomeHospitalSearch(center);
     relayoutHomeMapSoon();
 
@@ -796,7 +510,8 @@ async function initHomeMapOnce() {
     }
 
     homeMapInitialized = true;
-  } catch {
+  } catch (e) {
+    console.warn("home map", e);
     showHomeMapFallback("카카오맵을 불러오지 못했습니다. 도메인 등록을 확인하세요.");
     if (statusEl) statusEl.textContent = "";
     homeMapInitialized = true;
