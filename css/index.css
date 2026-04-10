@@ -369,7 +369,7 @@
   justify-content: center;
   gap: 4px;
   padding: 6px;
-  font-size: 0.65rem;
+  font-size: 1rem;
   font-weight: 700;
   line-height: 1.15;
   text-align: center;
@@ -377,7 +377,7 @@
 }
 
 .quick-item span {
-  font-size: clamp(0.95rem, 3.5vw, 1.2rem);
+  font-size: 1.4rem;
   line-height: 1;
 }
 

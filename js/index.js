@@ -311,10 +311,12 @@ document.getElementById("btn-goto-search").addEventListener("click", () => {
   window.location.href = "search.html";
 });
 
+// 알림 버튼 클릭 시 메시지 띄우기
 document.getElementById("btn-dummy-noti").addEventListener("click", () => {
   alert("알림이 없습니다.");
 });
 
+// 빠른 서비스 클릭 시 메시지 띄우기
 function readyMessage(serviceName) {
   alert(`${serviceName} 서비스는 준비 중입니다.`);
 }
