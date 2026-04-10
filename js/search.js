@@ -213,10 +213,11 @@ function seedInitialUsers() {
         {
           id: "res-seed-1",
           hospitalName: "행복 동물병원",
-          address: "서울 강남구",
+          address: "서울 강남구 테헤란로 123",
+          phone: "02-1234-5678",
           petName: "뭉치",
           reason: "정기검진",
-          datetime: "2026-04-07T11:33", // 시드 예약 날짜
+          datetime: "2026-04-07T11:33",
           placeId: "seed",
         },
       ],
@@ -642,6 +643,25 @@ function hideMapFallback() {
   document.getElementById("map-container").classList.remove("hidden");
 }
 
+function getUserCoordsOrDefault() {
+  return new Promise((resolve) => {
+    const fallback = { lat: 37.5665, lng: 126.978 };
+    if (!navigator.geolocation) {
+      resolve(fallback);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        }),
+      () => resolve(fallback),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+    );
+  });
+}
+
 /* =============================================================================
  * [기능] 지도 초기화 (최초 1회만 실행)
  * mapInitialized 플래그로 중복 초기화를 방지합니다.
@@ -649,50 +669,47 @@ function hideMapFallback() {
  * API 키 없음 → 목업 모드 (폴백 UI + 목업 병원 목록)
  * API 키 있음 → 카카오 SDK 로드 → 지도 생성 → 기본 검색("동물병원")
  * ============================================================================= */
-function initMapOnce() {
-  if (mapInitialized) return; // 이미 초기화됐으면 스킵
-  mapInitialized = true;
+async function initMapOnce() {
+  if (mapInitialized) return;
 
   const statusEl = document.getElementById("map-status");
 
-  // API 키가 없으면 지도/목록을 표시하지 않음
   if (!hasKakaoKey()) {
     showMapFallback(
       "카카오맵 키를 불러오지 못했습니다. (Vercel 환경변수 KAKAO_APP_KEY 및 카카오 콘솔 도메인 등록을 확인하세요.)"
     );
     statusEl.textContent = "";
     renderHospitalList([]);
+    mapInitialized = true;
     return;
   }
 
-  // API 키가 있으면 카카오 SDK를 비동기로 로드
-  loadKakaoScript()
-    .then(() => {
-      hideMapFallback();
+  const coords = await getUserCoordsOrDefault();
 
-      const container = document.getElementById("map-container");
-      const center = new kakao.maps.LatLng(37.5665, 126.978); // 서울 시청 좌표 (초기 중심점)
-      const options = { center, level: 5 }; // level: 지도 확대 레벨 (숫자 클수록 넓음)
+  try {
+    await loadKakaoScript();
+    hideMapFallback();
 
-      kakaoMap = new kakao.maps.Map(container, options);
+    const container = document.getElementById("map-container");
+    const center = new kakao.maps.LatLng(coords.lat, coords.lng);
+    const options = { center, level: 5 };
 
-      // 장소 검색 서비스 초기화 (keywordSearch 사용에 필요)
-      placesService = new kakao.maps.services.Places();
+    kakaoMap = new kakao.maps.Map(container, options);
+    placesService = new kakao.maps.services.Places();
 
-      statusEl.textContent =
-        "카카오맵 로드됨 — 검색어를 입력해 동물병원을 찾아보세요.";
+    statusEl.textContent =
+      "현 위치 주변 동물병원을 표시합니다. 검색어를 입력해 찾아보세요.";
 
-      // 초기 검색: 현재 위치 주변 "동물병원" 검색
-      searchHospitalsKeyword("동물병원");
-    })
-    .catch(() => {
-      // SDK 로드 실패 (API 키 오류, 도메인 미등록 등)
-      showMapFallback(
-        "카카오맵을 불러오지 못했습니다. API 키와 도메인 등록을 확인하세요."
-      );
-      statusEl.textContent = "";
-      renderHospitalList([]);
-    });
+    searchHospitalsKeyword("동물병원");
+    mapInitialized = true;
+  } catch {
+    showMapFallback(
+      "카카오맵을 불러오지 못했습니다. API 키와 도메인 등록을 확인하세요."
+    );
+    statusEl.textContent = "";
+    renderHospitalList([]);
+    mapInitialized = true;
+  }
 }
 
 /* =============================================================================
@@ -913,7 +930,7 @@ function closeBookModal() {
 
 (async () => {
   await ensureSecretsLoaded();
-  initMapOnce();
+  await initMapOnce();
 })();
 
 const searchInput = document.getElementById("hospital-search-input");
@@ -959,10 +976,13 @@ document.getElementById("form-book").addEventListener("submit", (e) => {
     id: uid(),
     hospitalName: document.getElementById("book-place-name").value,
     address: document.getElementById("book-place-address").value,
+    phone: document.getElementById("book-place-phone").value,
     petName: (document.getElementById("book-pet-name")?.value || "").trim() || "반려동물",
     reason: document.getElementById("book-reason").value,
     datetime: document.getElementById("book-datetime").value,
     placeId: document.getElementById("book-place-id").value,
+    y: document.getElementById("book-place-y").value,
+    x: document.getElementById("book-place-x").value,
   };
 
   if (!record.datetime) {

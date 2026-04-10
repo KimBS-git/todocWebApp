@@ -525,3 +525,135 @@ img {
 .res-card__action:hover {
   background: rgba(51, 102, 255, 0.06);
 }
+
+/* ─── 지난 예약 카드: 후기 별점 (날짜 아래) ─────────────────── */
+.res-card__review {
+  font-size: 0.75rem;
+  color: #ca8a04;
+  letter-spacing: 0.06em;
+  margin-top: 4px;
+  line-height: 1.2;
+}
+
+/* ─── 모달 (예약 상세 · 예약하기 · 후기) ───────────────────── */
+.modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 23, 42, 0.45);
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modal-backdrop.is-open {
+  display: flex;
+}
+
+.modal {
+  background: var(--color-card);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px 18px 28px;
+}
+
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal__head h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.modal-close {
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+  padding: 4px 8px;
+}
+
+.modal__foot {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.modal__foot .btn-primary,
+.modal__foot .btn-secondary {
+  flex: 1;
+  width: auto;
+  margin-top: 0;
+}
+
+.modal__foot--single .btn-primary {
+  width: 100%;
+}
+
+.res-detail-dl {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 10px 12px;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.res-detail-dl dt {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.res-detail-dl dd {
+  margin: 0;
+}
+
+.label-block {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.review-stars-input {
+  display: flex;
+  gap: 2px;
+}
+
+.review-star-btn {
+  font-size: 1.75rem;
+  line-height: 1;
+  padding: 2px 4px;
+  color: #d1d5db;
+  background: none;
+  cursor: pointer;
+}
+
+.review-star-btn.is-active {
+  color: #fbbf24;
+}
+
+.form-group textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fafafa;
+  resize: vertical;
+  min-height: 88px;
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: #fff;
+}

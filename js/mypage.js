@@ -186,10 +186,11 @@ function seedInitialUsers() {
         {
           id: "res-seed-1",
           hospitalName: "행복 동물병원",
-          address: "서울 강남구",
+          address: "서울 강남구 테헤란로 123",
+          phone: "02-1234-5678",
           petName: "뭉치",
           reason: "정기검진",
-          datetime: "2026-04-07T11:33", // 시드 예약 날짜
+          datetime: "2026-04-07T11:33",
           placeId: "seed",
         },
       ],
@@ -363,18 +364,7 @@ function renderMyPage() {
   const mount = document.getElementById("mypage-content");
   if (!user) return;
 
-  const isAdmin = user.isAdmin === true;
-  const ADMIN_PETS_RESET_KEY = "todoc_admin_pets_reset_v1";
-
-  // 관리자 계정도 일반 사용자처럼 시작: 과거 시드(샘플 반려동물)가 남아있다면 1회 비우기
-  if (isAdmin && !localStorage.getItem(ADMIN_PETS_RESET_KEY)) {
-    localStorage.setItem(ADMIN_PETS_RESET_KEY, "1");
-    saveCurrentUserData({ pets: [] });
-  }
-
-  // 위에서 pets를 비웠을 수 있으니 최신 사용자 정보 재조회
-  const freshUser = getCurrentUser();
-  const pets = (freshUser && freshUser.pets) || [];
+  const pets = (user.pets) || [];
 
   /* ─── 반려동물 목록 블록 생성 ────────────────────────────────
      관리자/일반 공통: 추가/삭제 가능 + 추가 버튼 클릭 시 반려동물 모달 열기 */
@@ -399,7 +389,7 @@ function renderMyPage() {
      프로필 → 반려동물 목록 → 내 정보 관리 순서로 렌더링됩니다. */
   mount.innerHTML = `
     <div class="mypage-profile">
-      <div class="avatar">${isAdmin ? "🐾" : "👤"}</div>
+      <div class="avatar">👤</div>
       <div>
         <h2>${escapeHtml(user.displayName || user.username)}</h2>
         <p class="email">${escapeHtml(user.email || "")}</p>

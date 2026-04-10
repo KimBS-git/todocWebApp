@@ -188,10 +188,11 @@ function seedInitialUsers() {
         {
           id: "res-seed-1",
           hospitalName: "행복 동물병원",
-          address: "서울 강남구",
+          address: "서울 강남구 테헤란로 123",
+          phone: "02-1234-5678",
           petName: "뭉치",
           reason: "정기검진",
-          datetime: "2026-04-07T11:33", // 시드 예약 날짜
+          datetime: "2026-04-07T11:33",
           placeId: "seed",
         },
       ],
@@ -797,9 +798,30 @@ function clearHomeMarkers() {
   homeMarkers = [];
 }
 
+/**
+ * 브라우저 위치 권한으로 현재 좌표를 얻고, 실패 시 서울 시청 기준으로 폴백합니다.
+ */
+function getUserCoordsOrDefault() {
+  return new Promise((resolve) => {
+    const fallback = { lat: 37.5665, lng: 126.978 };
+    if (!navigator.geolocation) {
+      resolve(fallback);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        }),
+      () => resolve(fallback),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+    );
+  });
+}
+
 async function initHomeMapOnce() {
   if (homeMapInitialized) return;
-  homeMapInitialized = true;
 
   const statusEl = document.getElementById("home-map-status");
   await ensureSecretsLoaded();
@@ -807,23 +829,28 @@ async function initHomeMapOnce() {
   if (!hasKakaoKey()) {
     showHomeMapFallback("카카오맵 키를 불러오지 못했습니다. (도메인 등록/환경변수 확인)");
     if (statusEl) statusEl.textContent = "";
+    homeMapInitialized = true;
     return;
   }
+
+  const coords = await getUserCoordsOrDefault();
 
   try {
     await loadKakaoScript();
     hideHomeMapFallback();
 
     const container = document.getElementById("home-map-container");
-    if (!container) return;
+    if (!container) {
+      homeMapInitialized = true;
+      return;
+    }
 
-    const center = new kakao.maps.LatLng(37.5665, 126.978);
+    const center = new kakao.maps.LatLng(coords.lat, coords.lng);
     homeMap = new kakao.maps.Map(container, { center, level: 6 });
     homePlaces = new kakao.maps.services.Places();
 
-    if (statusEl) statusEl.textContent = "카카오맵 로드됨";
+    if (statusEl) statusEl.textContent = "현 위치 주변 동물병원을 표시합니다.";
 
-    // 홈에서는 항상 '동물병원'만 표시
     homePlaces.keywordSearch(
       "동물병원",
       (data, st) => {
@@ -840,8 +867,10 @@ async function initHomeMapOnce() {
       },
       { location: center, radius: 8000 }
     );
+    homeMapInitialized = true;
   } catch {
     showHomeMapFallback("카카오맵을 불러오지 못했습니다. 도메인 등록을 확인하세요.");
     if (statusEl) statusEl.textContent = "";
+    homeMapInitialized = true;
   }
 }

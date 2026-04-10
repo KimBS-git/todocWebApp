@@ -119,6 +119,103 @@
       </main>
     </div><!-- /main-app -->
 
+    <div
+      class="modal-backdrop"
+      id="modal-res-detail"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-res-detail-title"
+    >
+      <div class="modal">
+        <div class="modal__head">
+          <h3 id="modal-res-detail-title">예약 상세</h3>
+          <button type="button" class="modal-close" id="modal-res-detail-x" aria-label="닫기">×</button>
+        </div>
+        <div id="modal-res-detail-body"></div>
+        <div class="modal__foot modal__foot--single">
+          <button type="button" class="btn-primary" id="modal-res-detail-close">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="modal-backdrop"
+      id="modal-book"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-book-title"
+    >
+      <div class="modal">
+        <div class="modal__head">
+          <h3 id="modal-book-title">예약하기</h3>
+          <button type="button" class="modal-close" id="modal-book-close" aria-label="닫기">×</button>
+        </div>
+        <div id="modal-book-body"></div>
+        <form id="form-book">
+          <input type="hidden" id="book-place-id" />
+          <input type="hidden" id="book-place-name" />
+          <input type="hidden" id="book-place-address" />
+          <input type="hidden" id="book-place-phone" />
+          <input type="hidden" id="book-place-y" />
+          <input type="hidden" id="book-place-x" />
+          <div class="form-group">
+            <label for="book-datetime">예약 일시</label>
+            <input type="datetime-local" id="book-datetime" required />
+          </div>
+          <div class="form-group">
+            <label for="book-reason">방문 유형</label>
+            <input type="text" id="book-reason" placeholder="예: 예방접종" />
+          </div>
+          <div class="form-group">
+            <label for="book-pet-name">반려동물 이름</label>
+            <input type="text" id="book-pet-name" placeholder="예: 뭉치" />
+          </div>
+          <div class="form-group">
+            <label for="book-name">보호자 이름</label>
+            <input type="text" id="book-name" placeholder="이름 입력" />
+          </div>
+          <div class="form-group">
+            <label for="book-phone">보호자 전화번호</label>
+            <input type="text" id="book-phone" required placeholder="010-0000-0000" />
+          </div>
+          <button type="submit" class="btn-primary">예약 완료 (목업)</button>
+        </form>
+      </div>
+    </div>
+
+    <div
+      class="modal-backdrop"
+      id="modal-review"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-review-title"
+    >
+      <div class="modal">
+        <div class="modal__head">
+          <h3 id="modal-review-title">후기 작성</h3>
+          <button type="button" class="modal-close" id="modal-review-x" aria-label="닫기">×</button>
+        </div>
+        <div class="form-group">
+          <span class="label-block">별점</span>
+          <div class="review-stars-input" id="review-stars-input" role="group" aria-label="별점 선택">
+            <button type="button" class="review-star-btn" data-star="1" aria-label="1점">★</button>
+            <button type="button" class="review-star-btn" data-star="2" aria-label="2점">★</button>
+            <button type="button" class="review-star-btn" data-star="3" aria-label="3점">★</button>
+            <button type="button" class="review-star-btn" data-star="4" aria-label="4점">★</button>
+            <button type="button" class="review-star-btn" data-star="5" aria-label="5점">★</button>
+          </div>
+          <input type="hidden" id="review-star-value" value="0" />
+        </div>
+        <div class="form-group">
+          <label for="review-comment">코멘트</label>
+          <textarea id="review-comment" rows="4" placeholder="방문 소감을 남겨주세요"></textarea>
+        </div>
+        <div class="modal__foot">
+          <button type="button" class="btn-secondary" id="modal-review-close">닫기</button>
+          <button type="button" class="btn-primary" id="modal-review-save">저장</button>
+        </div>
+      </div>
+    </div>
 
     <script src="js/book.js"></script>
 

@@ -186,10 +186,11 @@ function seedInitialUsers() {
         {
           id: "res-seed-1",
           hospitalName: "행복 동물병원",
-          address: "서울 강남구",
+          address: "서울 강남구 테헤란로 123",
+          phone: "02-1234-5678",
           petName: "뭉치",
           reason: "정기검진",
-          datetime: "2026-04-07T11:33", // 시드 예약 날짜
+          datetime: "2026-04-07T11:33",
           placeId: "seed",
         },
       ],
@@ -427,6 +428,111 @@ function addReservation(record) {
   saveCurrentUserData({ reservations: list });
 }
 
+/**
+ * 예약 상세·모달용 날짜 문자열
+ */
+function formatReservationDatetime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  const yy = String(d.getFullYear()).slice(2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const day = weekdays[d.getDay()];
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${yy}.${mm}.${dd} (${day}) ${hh}:${min}`;
+}
+
+function updateReservationReview(resId, review) {
+  const user = getCurrentUser();
+  if (!user) return;
+  const next = (user.reservations || []).map((r) =>
+    String(r.id) === String(resId) ? { ...r, review } : r
+  );
+  saveCurrentUserData({ reservations: next });
+}
+
+function closeReservationDetailModal() {
+  document.getElementById("modal-res-detail").classList.remove("is-open");
+}
+
+function openReservationDetailModal(r) {
+  const badge = ddayBadge(r.datetime);
+  document.getElementById("modal-res-detail-body").innerHTML = `
+    <dl class="res-detail-dl">
+      <dt>병원명</dt><dd>${escapeHtml(r.hospitalName || "—")}</dd>
+      <dt>주소</dt><dd>${escapeHtml(r.address || "—")}</dd>
+      <dt>전화번호</dt><dd>${escapeHtml(r.phone || "—")}</dd>
+      <dt>진료 목적</dt><dd>${escapeHtml(r.reason || "—")}</dd>
+      <dt>반려동물 이름</dt><dd>${escapeHtml(r.petName || "—")}</dd>
+      <dt>예약 일시</dt><dd>${escapeHtml(formatReservationDatetime(r.datetime))}</dd>
+      <dt>D-Day</dt><dd><strong>${escapeHtml(badge.text)}</strong></dd>
+    </dl>`;
+  document.getElementById("modal-res-detail").classList.add("is-open");
+}
+
+function closeBookModalBook() {
+  document.getElementById("modal-book").classList.remove("is-open");
+}
+
+function openBookModalFromReservation(r) {
+  document.getElementById("book-place-id").value = r.placeId || "";
+  document.getElementById("book-place-name").value = r.hospitalName || "";
+  document.getElementById("book-place-address").value = r.address || "";
+  document.getElementById("book-place-phone").value = r.phone || "";
+  document.getElementById("book-place-y").value = r.y || "";
+  document.getElementById("book-place-x").value = r.x || "";
+
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById("book-datetime").value = now.toISOString().slice(0, 16);
+
+  const user = getCurrentUser();
+  const firstPet = user && user.pets && user.pets[0];
+  const petNameEl = document.getElementById("book-pet-name");
+  if (petNameEl) {
+    petNameEl.value = (r.petName || (firstPet ? firstPet.name : "") || "").trim();
+  }
+  document.getElementById("book-reason").value = r.reason || "";
+
+  document.getElementById("modal-book-body").innerHTML = `
+    <p style="margin:0 0 12px;font-size:0.9rem;color:var(--color-text-muted)">
+      <strong>${escapeHtml(r.hospitalName || "")}</strong><br/>
+      ${escapeHtml(r.address || "")}
+    </p>`;
+
+  document.getElementById("modal-book").classList.add("is-open");
+}
+
+let reviewTargetId = null;
+
+function setReviewStarButtons(value) {
+  document.getElementById("review-star-value").value = String(value);
+  document.querySelectorAll("#review-stars-input .review-star-btn").forEach((btn) => {
+    const n = Number(btn.getAttribute("data-star"));
+    btn.classList.toggle("is-active", n <= value);
+  });
+}
+
+function closeReviewModal() {
+  document.getElementById("modal-review").classList.remove("is-open");
+  reviewTargetId = null;
+  document.getElementById("review-comment").value = "";
+  setReviewStarButtons(0);
+}
+
+function openReviewModal(resId) {
+  reviewTargetId = resId;
+  const user = getCurrentUser();
+  const r = (user.reservations || []).find((x) => String(x.id) === String(resId));
+  const stars = r && r.review && r.review.stars ? r.review.stars : 0;
+  document.getElementById("review-comment").value =
+    r && r.review && r.review.comment ? r.review.comment : "";
+  setReviewStarButtons(stars);
+  document.getElementById("modal-review").classList.add("is-open");
+}
+
 /* =============================================================================
  * [UI] 예약내역 페이지 전체 렌더링
  * "예정된 예약" 탭과 "지난 예약" 탭의 내용을 각각 채웁니다.
@@ -463,19 +569,26 @@ function renderReservationPage() {
 function bindReservationActions() {
   document.querySelectorAll(".btn-res-detail").forEach((btn) => {
     btn.addEventListener("click", () => {
-      alert("데모: 상세보기는 연결되지 않았습니다.");
+      const id = btn.getAttribute("data-id");
+      const user = getCurrentUser();
+      const r = (user.reservations || []).find((x) => String(x.id) === String(id));
+      if (r) openReservationDetailModal(r);
     });
   });
 
   document.querySelectorAll(".btn-res-rebook").forEach((btn) => {
     btn.addEventListener("click", () => {
-      alert("데모: 재예약은 연결되지 않았습니다.");
+      const id = btn.getAttribute("data-id");
+      const user = getCurrentUser();
+      const r = (user.reservations || []).find((x) => String(x.id) === String(id));
+      if (r) openBookModalFromReservation(r);
     });
   });
 
   document.querySelectorAll(".btn-res-review").forEach((btn) => {
     btn.addEventListener("click", () => {
-      alert("데모: 후기작성은 연결되지 않았습니다.");
+      const id = btn.getAttribute("data-id");
+      if (id) openReviewModal(id);
     });
   });
 
@@ -508,6 +621,10 @@ function resCardHtml(r, showDday) {
   const badge = showDday ? ddayBadge(r.datetime) : null;
   const pet = r.petName || "—";
   const dtText = r.datetime ? r.datetime.replace("T", " ") : "";
+  const reviewStars =
+    !showDday && r.review && r.review.stars
+      ? `<div class="res-card__review" title="후기 별점">${"★".repeat(r.review.stars)}${"☆".repeat(5 - r.review.stars)}</div>`
+      : "";
 
   return `
     <article class="res-card">
@@ -519,6 +636,7 @@ function resCardHtml(r, showDday) {
         </div>
         <div class="res-card__right">
           <div class="res-card__date">${escapeHtml(dtText)}</div>
+          ${reviewStars}
           ${badge ? `<div class="${badge.className} res-card__badge--stacked">${badge.text}</div>` : ""}
         </div>
       </div>
@@ -565,4 +683,65 @@ document.querySelectorAll(".res-tab").forEach((tab) => {
 
 document.getElementById("btn-dummy-noti").addEventListener("click", () => {
   alert("데모: 알림이 없습니다.");
+});
+
+document.getElementById("modal-res-detail-close").addEventListener("click", closeReservationDetailModal);
+document.getElementById("modal-res-detail-x").addEventListener("click", closeReservationDetailModal);
+document.getElementById("modal-res-detail").addEventListener("click", (e) => {
+  if (e.target.id === "modal-res-detail") closeReservationDetailModal();
+});
+
+document.getElementById("modal-book-close").addEventListener("click", closeBookModalBook);
+document.getElementById("modal-book").addEventListener("click", (e) => {
+  if (e.target.id === "modal-book") closeBookModalBook();
+});
+
+document.getElementById("form-book").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const record = {
+    id: uid(),
+    hospitalName: document.getElementById("book-place-name").value,
+    address: document.getElementById("book-place-address").value,
+    phone: document.getElementById("book-place-phone").value,
+    petName: (document.getElementById("book-pet-name")?.value || "").trim() || "반려동물",
+    reason: document.getElementById("book-reason").value,
+    datetime: document.getElementById("book-datetime").value,
+    placeId: document.getElementById("book-place-id").value,
+    y: document.getElementById("book-place-y").value,
+    x: document.getElementById("book-place-x").value,
+  };
+  if (!record.datetime) {
+    alert("일시를 선택하세요.");
+    return;
+  }
+  addReservation(record);
+  closeBookModalBook();
+  alert("예약 정보가 저장되었습니다. (실제 예약이 아닌 데모입니다.)");
+  renderReservationPage();
+});
+
+document.querySelectorAll("#review-stars-input .review-star-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const v = Number(btn.getAttribute("data-star"));
+    setReviewStarButtons(v);
+  });
+});
+
+document.getElementById("modal-review-save").addEventListener("click", () => {
+  const stars = Number(document.getElementById("review-star-value").value);
+  const comment = document.getElementById("review-comment").value.trim();
+  if (!reviewTargetId) return;
+  if (!stars || stars < 1) {
+    alert("별점을 선택해 주세요.");
+    return;
+  }
+  updateReservationReview(reviewTargetId, { stars, comment });
+  closeReviewModal();
+  renderReservationPage();
+});
+
+document.getElementById("modal-review-close").addEventListener("click", closeReviewModal);
+document.getElementById("modal-review-x").addEventListener("click", closeReviewModal);
+document.getElementById("modal-review").addEventListener("click", (e) => {
+  if (e.target.id === "modal-review") closeReviewModal();
 });
