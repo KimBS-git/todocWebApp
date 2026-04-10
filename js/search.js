@@ -225,6 +225,38 @@ function resCardHtml(r, showDday) {
  *   4. openBookModal() — 병원 카드의 "예약하기" 버튼 클릭 시 모달 열기
  */
 
+let kakaoMap = null;
+let placesService = null;
+let mapMarkers = [];
+let mapInitialized = false;
+let searchInfoWindow = null;
+let searchMapResizeBound = false;
+let searchMapLifecycleBound = false;
+let activeFilter = "all";
+
+/* 홈(index.js)과 동일 sessionStorage 키 — 페이지 이동 후에도 위치 캐시 공유 */
+const TODOC_GEO_SEARCH_KEY = "todoc_geo_v1";
+
+function readGeoCacheSearch() {
+  try {
+    const raw = sessionStorage.getItem(TODOC_GEO_SEARCH_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (typeof o.lat === "number" && typeof o.lng === "number") return o;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function writeGeoCacheSearch(coords) {
+  try {
+    sessionStorage.setItem(TODOC_GEO_SEARCH_KEY, JSON.stringify(coords));
+  } catch {
+    /* ignore */
+  }
+}
+
 /* =============================================================================
  * [기능] 카카오 API 키 존재 여부 확인
  * 키가 10자 이상이면 실제 API를 사용하고, 아니면 목업 모드로 동작합니다.
@@ -323,6 +355,26 @@ function bindSearchMapResize() {
   });
 }
 
+/** 뒤로가기(bfcache)·탭 복귀 시 타일이 회색으로 남는 현상 완화 */
+function bindSearchMapLifecycle() {
+  if (searchMapLifecycleBound) return;
+  searchMapLifecycleBound = true;
+  window.addEventListener("pageshow", () => {
+    if (!kakaoMap) return;
+    relayoutSearchMapSoon();
+    [50, 200, 500].forEach((ms) => {
+      setTimeout(() => {
+        if (kakaoMap) kakaoMap.relayout();
+      }, ms);
+    });
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || !kakaoMap) return;
+    relayoutSearchMapSoon();
+    setTimeout(() => kakaoMap && kakaoMap.relayout(), 150);
+  });
+}
+
 function relayoutSearchMapSoon() {
   requestAnimationFrame(() => {
     if (kakaoMap) kakaoMap.relayout();
@@ -408,6 +460,7 @@ async function initMapOnce() {
     kakaoMap = new kakao.maps.Map(container, options);
     placesService = new kakao.maps.services.Places();
     bindSearchMapResize();
+    bindSearchMapLifecycle();
 
     if (kakao.maps.event && kakao.maps.event.addListener) {
       kakao.maps.event.addListener(kakaoMap, "tilesloaded", () => {
@@ -419,6 +472,9 @@ async function initMapOnce() {
 
     searchHospitalsKeyword("동물병원");
     relayoutSearchMapSoon();
+    [50, 200, 500].forEach((ms) => {
+      setTimeout(() => kakaoMap && kakaoMap.relayout(), ms);
+    });
 
     getUserCoordsOrDefault({ preferSessionCache: true }).then((coords) => {
       if (!kakaoMap || !placesService) return;

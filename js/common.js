@@ -35,6 +35,45 @@ async function ensureSecretsLoaded() {
 const STORAGE_USERS = "todoc_users_v1";
 const STORAGE_SESSION = "todoc_session_v1";
 
+/** 데모용 기본 관리자 — 로컬에서 admin 행을 지워도 다음 로드 시 복구됩니다. */
+const DEFAULT_ADMIN_ID = "admin";
+const DEFAULT_ADMIN_PASSWORD = "admin";
+
+function createAdminPastDemoReservation() {
+  const d = new Date();
+  d.setDate(d.getDate() - 45);
+  const pad = (n) => String(n).padStart(2, "0");
+  const datetime = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return {
+    id: "demo-admin-past-reservation",
+    hospitalName: "토닥 데모 동물병원",
+    address: "서울특별시 중구 세종대로 110",
+    phone: "02-1234-5678",
+    petName: "뭉치",
+    reason: "정기 검진 (데모 예약)",
+    datetime,
+    placeId: "",
+    y: "37.5665",
+    x: "126.978",
+  };
+}
+
+/** admin 계정이 없을 때만 비밀번호 admin으로 생성 + 지난 예약 데모 1건 */
+function ensureDefaultAdminAccount() {
+  const users = loadUsers();
+  if (!users || users[DEFAULT_ADMIN_ID]) return;
+
+  users[DEFAULT_ADMIN_ID] = {
+    password: DEFAULT_ADMIN_PASSWORD,
+    isAdmin: true,
+    displayName: "관리자",
+    phone: "",
+    pets: [],
+    reservations: [createAdminPastDemoReservation()],
+  };
+  saveUsers(users);
+}
+
 function escapeHtml(s) {
   const d = document.createElement("div");
   d.textContent = s;
@@ -69,6 +108,7 @@ function saveUsers(users) {
 
 function ensureUsersStorage() {
   if (!loadUsers()) saveUsers({});
+  ensureDefaultAdminAccount();
 }
 
 function getSession() {

@@ -275,6 +275,7 @@ let homePlaces = null;
 let homeMarkers = [];
 let homeInfoWindow = null;
 let homeMapResizeBound = false;
+let homeMapLifecycleBound = false;
 
 const TODOC_GEO_KEY = "todoc_geo_v1";
 
@@ -418,6 +419,24 @@ function relayoutHomeMapSoon() {
   }, 250);
 }
 
+/** 다른 페이지 갔다가 돌아올 때(bfcache·탭 복귀) 지도가 회색으로 남는 현상 완화 */
+function bindHomeMapLifecycle() {
+  if (homeMapLifecycleBound) return;
+  homeMapLifecycleBound = true;
+  window.addEventListener("pageshow", () => {
+    if (!homeMap) return;
+    relayoutHomeMapSoon();
+    [50, 200, 500].forEach((ms) => {
+      setTimeout(() => homeMap && homeMap.relayout(), ms);
+    });
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || !homeMap) return;
+    relayoutHomeMapSoon();
+    setTimeout(() => homeMap && homeMap.relayout(), 150);
+  });
+}
+
 function applyHomeKeywordResults(data, st) {
   if (st !== kakao.maps.services.Status.OK || !data.length) {
     clearHomeMarkers();
@@ -479,6 +498,7 @@ async function initHomeMapOnce() {
     homeMap = new kakao.maps.Map(container, { center: defaultCenter, level: 6 });
     homePlaces = new kakao.maps.services.Places();
     bindHomeMapResize();
+    bindHomeMapLifecycle();
 
     if (kakao.maps.event && kakao.maps.event.addListener) {
       kakao.maps.event.addListener(homeMap, "tilesloaded", () => {
@@ -487,6 +507,9 @@ async function initHomeMapOnce() {
     }
 
     relayoutHomeMapSoon();
+    [50, 200, 500].forEach((ms) => {
+      setTimeout(() => homeMap && homeMap.relayout(), ms);
+    });
 
     const coords = await getUserCoordsOrDefault();
     const center = new kakao.maps.LatLng(coords.lat, coords.lng);
@@ -494,6 +517,9 @@ async function initHomeMapOnce() {
     if (statusEl) statusEl.textContent = "현 위치 주변 동물병원을 표시합니다.";
     runHomeHospitalSearch(center);
     relayoutHomeMapSoon();
+    [100, 400].forEach((ms) => {
+      setTimeout(() => homeMap && homeMap.relayout(), ms);
+    });
 
     const locateBtn = document.getElementById("btn-home-locate");
     if (locateBtn && !locateBtn.dataset.bound) {
