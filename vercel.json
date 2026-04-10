@@ -1,4 +1,19 @@
 {
+  "rewrites": [
+    { "source": "/", "destination": "/html/index.html" },
+    { "source": "/index.html", "destination": "/html/index.html" },
+    { "source": "/search.html", "destination": "/html/search.html" },
+    { "source": "/book.html", "destination": "/html/book.html" },
+    { "source": "/mypage.html", "destination": "/html/mypage.html" }
+  ],
+  "redirects": [
+    { "source": "/html", "destination": "/", "permanent": false },
+    { "source": "/html/", "destination": "/", "permanent": false },
+    { "source": "/html/index.html", "destination": "/", "permanent": false },
+    { "source": "/html/search.html", "destination": "/search.html", "permanent": false },
+    { "source": "/html/book.html", "destination": "/book.html", "permanent": false },
+    { "source": "/html/mypage.html", "destination": "/mypage.html", "permanent": false }
+  ],
   "headers": [
     {
       "source": "/js/search.js",
