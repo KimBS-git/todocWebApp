@@ -368,12 +368,16 @@ function closeHospitalDetailModal() {
   document.getElementById("modal-hospital-detail").classList.remove("is-open");
 }
 
+/* 서울 시청 부근 — GPS 대기 중에도 지도·타일을 먼저 그리기 위한 기본 중심 (index.js 홈 지도와 동일) */
+const SEARCH_MAP_DEFAULT_CENTER = { lat: 37.5665, lng: 126.978 };
+
 /* =============================================================================
  * [기능] 지도 초기화 (최초 1회만 실행)
  * mapInitialized 플래그로 중복 초기화를 방지합니다.
  *
  * API 키 없음 → 폴백 UI
- * API 키 있음 → 카카오 SDK 로드 → 지도 생성 → 기본 검색("동물병원")
+ * API 키 있음 → SDK 로드 → 즉시 기본 좌표로 지도 생성 → 검색 → GPS는 뒤이어 반영
+ * (이전: GPS 완료를 await 한 뒤 지도 생성 → 위치 권한/타임아웃 동안 회색 화면만 노출)
  * ============================================================================= */
 async function initMapOnce() {
   if (mapInitialized) return;
@@ -390,25 +394,45 @@ async function initMapOnce() {
     return;
   }
 
-  const coords = await getUserCoordsOrDefault({ preferSessionCache: true });
-
   try {
     await loadKakaoScript();
     hideMapFallback();
 
     const container = document.getElementById("map-container");
-    const center = new kakao.maps.LatLng(coords.lat, coords.lng);
+    const center = new kakao.maps.LatLng(
+      SEARCH_MAP_DEFAULT_CENTER.lat,
+      SEARCH_MAP_DEFAULT_CENTER.lng,
+    );
     const options = { center, level: 5 };
 
     kakaoMap = new kakao.maps.Map(container, options);
     placesService = new kakao.maps.services.Places();
     bindSearchMapResize();
 
-    statusEl.textContent =
-      "현 위치 주변 동물병원을 표시합니다. 검색어를 입력해 찾아보세요.";
+    if (kakao.maps.event && kakao.maps.event.addListener) {
+      kakao.maps.event.addListener(kakaoMap, "tilesloaded", () => {
+        relayoutSearchMapSoon();
+      });
+    }
+
+    statusEl.textContent = "지도를 불러오는 중… 위치를 확인하면 주변 병원으로 맞춥니다.";
 
     searchHospitalsKeyword("동물병원");
     relayoutSearchMapSoon();
+
+    getUserCoordsOrDefault({ preferSessionCache: true }).then((coords) => {
+      if (!kakaoMap || !placesService) return;
+      const ll = new kakao.maps.LatLng(coords.lat, coords.lng);
+      kakaoMap.setCenter(ll);
+      kakaoMap.setLevel(5);
+      statusEl.textContent =
+        "현 위치 주변 동물병원을 표시합니다. 검색어를 입력해 찾아보세요.";
+      const q = normalizeHospitalQuery(
+        document.getElementById("hospital-search-input").value,
+      );
+      searchHospitalsKeyword(q || "동물병원");
+      relayoutSearchMapSoon();
+    });
 
     const locateBtn = document.getElementById("btn-search-locate");
     if (locateBtn && !locateBtn.dataset.bound) {
