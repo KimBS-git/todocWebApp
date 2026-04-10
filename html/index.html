@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>토닥 — 홈</title>
 
-    <link rel="preconnect" href="https://dapi.kakao.com" crossorigin />
     <!-- 폰트: Pretendard (한국어 최적화 산세리프) -->
     <link
       rel="stylesheet"
@@ -200,13 +199,6 @@
         <!-- 빈 헤더 (추후 사용자 인사말 등 추가 가능) -->
         <div class="home-header"></div>
 
-        <!-- 홈 지도: 카카오맵(동물병원) 미리보기 -->
-        <div class="map-wrap map-wrap--home">
-          <div id="home-map-container"></div>
-          <div id="home-map-fallback" class="map-fallback hidden"></div>
-        </div>
-        <p id="home-map-status" class="mt-8" style="font-size:0.8rem;color:var(--color-text-muted)"></p>
-
         <!-- 병원검색 페이지(search.html)로 이동하는 CTA 버튼 -->
         <button type="button" class="btn-map-cta" id="btn-goto-search">
           지도에서 병원 찾기
@@ -237,6 +229,15 @@
         <!-- 이전 예약 미니 카드 영역
              home.js renderHome()이 가장 최근 지난 예약을 여기에 삽입합니다. -->
         <div id="home-prev-list"></div>
+
+        <!-- 나의 반려동물 (마이페이지 데이터, 하단 고정 영역) -->
+        <section class="home-pets-section" aria-labelledby="home-pets-title">
+          <div class="prev-section-head home-pets-head">
+            <h2 id="home-pets-title"><span>🐾</span> 나의 반려동물</h2>
+            <a href="mypage.html" class="link-all">전체보기 →</a>
+          </div>
+          <div id="home-pets-wrap" class="home-pets-scroll"></div>
+        </section>
 
       </main>
     </div><!-- /main-app -->

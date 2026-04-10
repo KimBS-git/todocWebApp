@@ -94,6 +94,55 @@ function ddayBadge(isoDatetime) {
  */
 
 /* =============================================================================
+ * [UI] 홈 — 반려동물 카드 (마이페이지와 동일 데이터)
+ * ============================================================================= */
+function homePetCardHtml(p) {
+  const genderLabel = p.gender === "female" ? "암컷" : "수컷";
+  const photo =
+    p.photo ||
+    `data:image/svg+xml,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">` +
+        `<rect fill="#e5e7eb" width="64" height="64"/>` +
+        `<text x="32" y="38" text-anchor="middle" font-size="24">🐱</text>` +
+        `</svg>`,
+    )}`;
+  const age = p.age != null ? `${p.age}살` : "-";
+  return `
+    <article class="home-pet-card" role="button" tabindex="0" title="마이페이지로 이동">
+      <div class="home-pet-card__thumb">
+        <img src="${photo}" alt="${escapeHtml(p.name)}" />
+      </div>
+      <div class="home-pet-card__meta">
+        <strong>${escapeHtml(p.name)}</strong>
+        <span>${escapeHtml(p.breed || "")} · ${genderLabel} · ${age}</span>
+      </div>
+    </article>`;
+}
+
+function renderHomePetsBlock(user) {
+  const wrap = document.getElementById("home-pets-wrap");
+  if (!wrap) return;
+  const pets = user.pets || [];
+  if (!pets.length) {
+    wrap.innerHTML = `<p class="empty-state" style="padding:16px">등록된 반려동물이 없습니다. 마이페이지에서 추가해 보세요.</p>`;
+    return;
+  }
+  wrap.innerHTML = pets.map((p) => homePetCardHtml(p)).join("");
+  const goMypage = () => {
+    window.location.href = "mypage.html";
+  };
+  wrap.querySelectorAll(".home-pet-card").forEach((el) => {
+    el.addEventListener("click", goMypage);
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        goMypage();
+      }
+    });
+  });
+}
+
+/* =============================================================================
  * [UI] 홈 페이지 렌더링
  * 로그인한 사용자의 예약 데이터를 읽어 홈 화면을 갱신합니다.
  * navigateTo("home") 및 로그인 직후 showMainApp()에서 호출됩니다.
@@ -172,6 +221,8 @@ function renderHome() {
     // 예정 예약은 있지만 지난 예약이 없는 경우
     homePrev.innerHTML = `<div class="empty-state">이전 예약이 없습니다.</div>`;
   }
+
+  renderHomePetsBlock(user);
 }
 
 /* =============================================================================
@@ -219,7 +270,6 @@ function formatShortDate(iso) {
     document.getElementById("auth-screen").classList.add("hidden");
     document.getElementById("main-app").classList.remove("hidden");
     renderHome();
-    initHomeMapOnce();
   }
 })();
 
@@ -232,7 +282,6 @@ document.getElementById("form-login").addEventListener("submit", (e) => {
     document.getElementById("auth-screen").classList.add("hidden");
     document.getElementById("main-app").classList.remove("hidden");
     renderHome();
-    initHomeMapOnce();
   }
 });
 
@@ -245,7 +294,6 @@ document.getElementById("form-signup").addEventListener("submit", (e) => {
     document.getElementById("auth-screen").classList.add("hidden");
     document.getElementById("main-app").classList.remove("hidden");
     renderHome();
-    initHomeMapOnce();
   }
 });
 
@@ -269,309 +317,4 @@ document.getElementById("btn-dummy-noti").addEventListener("click", () => {
 
 function readyMessage(serviceName) {
   alert(`${serviceName} 서비스는 준비 중입니다.`);
-}
-
-/* =============================================================================
- * [홈 지도] 카카오맵 미리보기 (동물병원만)
- * - 배포에서는 /api/config에서 키를 주입받습니다.
- * ============================================================================= */
-let homeMapInitialized = false;
-let homeMap = null;
-let homePlaces = null;
-let homeMarkers = [];
-let homeInfoWindow = null;
-let homeMapResizeBound = false;
-let homeMapLifecycleBound = false;
-let homeMapResizeObserver = null;
-
-/** 서울시청 중심 — 홈 지도는 GPS 없이 고정 (페이지 전환 시에도 즉시 동일 표시) */
-const HOME_MAP_CENTER_LATLNG = { lat: 37.5665, lng: 126.978 };
-
-/**
- * 부모가 display:none이었다가 막 풀린 직후에는 컨테이너 크기가 0인 채로
- * kakao.maps.Map이 생성되면 타일이 영원히 회색으로 남습니다. 레이아웃이 잡힐 때까지 대기합니다.
- */
-function waitForHomeMapContainerReady(container) {
-  return new Promise((resolve) => {
-    let frames = 0;
-    const maxFrames = 90;
-    const tick = () => {
-      const w = container.offsetWidth;
-      const h = container.offsetHeight;
-      if (w > 1 && h > 1) {
-        resolve();
-        return;
-      }
-      frames += 1;
-      if (frames >= maxFrames) {
-        resolve();
-        return;
-      }
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(() => requestAnimationFrame(tick));
-  });
-}
-
-function hasKakaoKey() {
-  return (
-    typeof CONFIG.KAKAO_APP_KEY === "string" && CONFIG.KAKAO_APP_KEY.length > 10
-  );
-}
-
-function loadKakaoScript() {
-  return new Promise((resolve, reject) => {
-    if (typeof kakao !== "undefined" && kakao.maps) {
-      resolve();
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${CONFIG.KAKAO_APP_KEY}&libraries=services&autoload=false`;
-    s.onload = () => {
-      if (typeof kakao !== "undefined") kakao.maps.load(resolve);
-      else reject(new Error("kakao"));
-    };
-    s.onerror = () => reject(new Error("load fail"));
-    document.head.appendChild(s);
-  });
-}
-
-function showHomeMapFallback(message) {
-  const fb = document.getElementById("home-map-fallback");
-  const c = document.getElementById("home-map-container");
-  if (fb) {
-    fb.textContent = message;
-    fb.classList.remove("hidden");
-  }
-  if (c) c.classList.add("hidden");
-}
-
-function hideHomeMapFallback() {
-  const fb = document.getElementById("home-map-fallback");
-  const c = document.getElementById("home-map-container");
-  if (fb) fb.classList.add("hidden");
-  if (c) c.classList.remove("hidden");
-}
-
-function clearHomeMarkers() {
-  homeMarkers.forEach((m) => {
-    try {
-      m.setMap(null);
-    } catch {
-      /* 지도 인스턴스가 이미 해제된 경우 */
-    }
-  });
-  homeMarkers = [];
-  if (homeInfoWindow) {
-    try {
-      homeInfoWindow.close();
-    } catch {
-      /* ignore */
-    }
-    homeInfoWindow = null;
-  }
-}
-
-function homeMapKakaoPlaceToHospital(p, i) {
-  return {
-    id: p.id || `kakao-${i}`,
-    place_name: p.place_name,
-    address_name: p.address_name,
-    road_address_name: p.road_address_name,
-    phone: p.phone,
-    x: p.x,
-    y: p.y,
-  };
-}
-
-function homeInfoWindowHtml(h) {
-  const addr = h.road_address_name || h.address_name || "—";
-  const phone = h.phone || "—";
-  return (
-    `<div class="map-info-window">` +
-    `<strong>${escapeHtml(h.place_name || "")}</strong>` +
-    `<p>${escapeHtml(addr)}</p>` +
-    `<p>${escapeHtml(phone)}</p>` +
-    `</div>`
-  );
-}
-
-function bindHomeMapResize() {
-  if (homeMapResizeBound) return;
-  homeMapResizeBound = true;
-  window.addEventListener("resize", () => {
-    if (homeMap) homeMap.relayout();
-  });
-}
-
-function relayoutHomeMapSoon() {
-  requestAnimationFrame(() => {
-    if (homeMap) homeMap.relayout();
-  });
-  setTimeout(() => {
-    if (homeMap) homeMap.relayout();
-  }, 250);
-}
-
-/** 다른 페이지 갔다가 돌아올 때(bfcache·탭 복귀) 지도가 회색으로 남는 현상 완화 */
-function bindHomeMapLifecycle() {
-  if (homeMapLifecycleBound) return;
-  homeMapLifecycleBound = true;
-  window.addEventListener("pageshow", (ev) => {
-    if (ev.persisted) {
-      if (homeMapResizeObserver) {
-        try {
-          homeMapResizeObserver.disconnect();
-        } catch {
-          /* ignore */
-        }
-        homeMapResizeObserver = null;
-      }
-      homeMapInitialized = false;
-      homeMap = null;
-      homePlaces = null;
-      clearHomeMarkers();
-      const c = document.getElementById("home-map-container");
-      if (c) c.innerHTML = "";
-      hideHomeMapFallback();
-      initHomeMapOnce();
-      return;
-    }
-    if (!homeMap) return;
-    relayoutHomeMapSoon();
-    [50, 200, 500].forEach((ms) => {
-      setTimeout(() => homeMap && homeMap.relayout(), ms);
-    });
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible" || !homeMap) return;
-    relayoutHomeMapSoon();
-    setTimeout(() => homeMap && homeMap.relayout(), 150);
-  });
-}
-
-function applyHomeKeywordResults(data, st) {
-  if (st !== kakao.maps.services.Status.OK || !data.length) {
-    clearHomeMarkers();
-    return;
-  }
-  clearHomeMarkers();
-  const bounds = new kakao.maps.LatLngBounds();
-  data.slice(0, 10).forEach((p, i) => {
-    const h = homeMapKakaoPlaceToHospital(p, i);
-    const pos = new kakao.maps.LatLng(parseFloat(h.y), parseFloat(h.x));
-    bounds.extend(pos);
-    const m = new kakao.maps.Marker({ map: homeMap, position: pos });
-    homeMarkers.push(m);
-    kakao.maps.event.addListener(m, "click", () => {
-      if (!homeInfoWindow) {
-        homeInfoWindow = new kakao.maps.InfoWindow({ removable: true });
-      }
-      homeInfoWindow.setContent(homeInfoWindowHtml(h));
-      homeInfoWindow.open(homeMap, m);
-    });
-  });
-  homeMap.setBounds(bounds);
-  relayoutHomeMapSoon();
-  setTimeout(() => homeMap && homeMap.relayout(), 100);
-}
-
-function runHomeHospitalSearch(latlng) {
-  if (!homePlaces || !homeMap) return;
-  homePlaces.keywordSearch(
-    "동물병원",
-    (data, st) => applyHomeKeywordResults(data, st),
-    { location: latlng, radius: 8000 },
-  );
-}
-
-async function initHomeMapOnce() {
-  if (homeMapInitialized) return;
-
-  const statusEl = document.getElementById("home-map-status");
-  await ensureSecretsLoaded();
-
-  if (!hasKakaoKey()) {
-    showHomeMapFallback(
-      "카카오맵 키를 불러오지 못했습니다. (도메인 등록/환경변수 확인)",
-    );
-    if (statusEl) statusEl.textContent = "";
-    homeMapInitialized = true;
-    return;
-  }
-
-  try {
-    await loadKakaoScript();
-    hideHomeMapFallback();
-
-    const container = document.getElementById("home-map-container");
-    if (!container) {
-      homeMapInitialized = true;
-      return;
-    }
-
-    await waitForHomeMapContainerReady(container);
-
-    const defaultCenter = new kakao.maps.LatLng(
-      HOME_MAP_CENTER_LATLNG.lat,
-      HOME_MAP_CENTER_LATLNG.lng,
-    );
-    homeMap = new kakao.maps.Map(container, {
-      center: defaultCenter,
-      level: 6,
-    });
-    homePlaces = new kakao.maps.services.Places();
-    bindHomeMapResize();
-    bindHomeMapLifecycle();
-
-    if (typeof ResizeObserver !== "undefined") {
-      if (homeMapResizeObserver) {
-        try {
-          homeMapResizeObserver.disconnect();
-        } catch {
-          /* ignore */
-        }
-      }
-      homeMapResizeObserver = new ResizeObserver(() => {
-        if (homeMap) homeMap.relayout();
-      });
-      homeMapResizeObserver.observe(container);
-    }
-
-    if (kakao.maps.event && kakao.maps.event.addListener) {
-      kakao.maps.event.addListener(homeMap, "tilesloaded", () => {
-        relayoutHomeMapSoon();
-      });
-    }
-
-    relayoutHomeMapSoon();
-    [50, 200, 500].forEach((ms) => {
-      setTimeout(() => homeMap && homeMap.relayout(), ms);
-    });
-
-    if (statusEl) {
-      statusEl.textContent = "서울시청 중심 주변 동물병원을 표시합니다.";
-    }
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (!homeMap || !homePlaces) return;
-        homeMap.relayout();
-        runHomeHospitalSearch(defaultCenter);
-        relayoutHomeMapSoon();
-        [100, 300, 600].forEach((ms) => {
-          setTimeout(() => homeMap && homeMap.relayout(), ms);
-        });
-      });
-    });
-
-    homeMapInitialized = true;
-  } catch (e) {
-    console.warn("home map", e);
-    showHomeMapFallback(
-      "카카오맵을 불러오지 못했습니다. 도메인 등록을 확인하세요.",
-    );
-    if (statusEl) statusEl.textContent = "";
-    homeMapInitialized = true;
-  }
 }
