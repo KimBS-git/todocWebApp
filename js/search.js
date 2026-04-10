@@ -73,6 +73,31 @@ let mapInitialized = false;
 /** 현재 활성화된 병원 필터 칩 값 ("all" | "24h" | "emergency" | "weekend" | "open") */
 let activeFilter = "all";
 
+let searchInfoWindow = null;
+let searchMapResizeBound = false;
+
+const TODOC_GEO_KEY = "todoc_geo_v1";
+
+function readGeoCacheSearch() {
+  try {
+    const raw = sessionStorage.getItem(TODOC_GEO_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (typeof o.lat === "number" && typeof o.lng === "number") return o;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function writeGeoCacheSearch(coords) {
+  try {
+    sessionStorage.setItem(TODOC_GEO_KEY, JSON.stringify(coords));
+  } catch {
+    /* ignore */
+  }
+}
+
 /* =============================================================================
  * [유틸] HTML 이스케이프
  * 사용자 입력값을 DOM에 삽입할 때 XSS 공격을 방지합니다.
@@ -577,23 +602,84 @@ function hideMapFallback() {
   document.getElementById("map-container").classList.remove("hidden");
 }
 
-function getUserCoordsOrDefault() {
+function getUserCoordsOrDefault(options = {}) {
+  const preferSessionCache = options.preferSessionCache === true;
+  const forceFresh = options.forceFresh === true;
+  if (preferSessionCache && !forceFresh) {
+    const c = readGeoCacheSearch();
+    if (c) return Promise.resolve({ lat: c.lat, lng: c.lng });
+  }
   return new Promise((resolve) => {
-    const fallback = { lat: 37.5665, lng: 126.978 };
+    const fallback = readGeoCacheSearch() || { lat: 37.5665, lng: 126.978 };
     if (!navigator.geolocation) {
       resolve(fallback);
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        resolve({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        }),
-      () => resolve(fallback),
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+      (pos) => {
+        const o = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        writeGeoCacheSearch(o);
+        resolve(o);
+      },
+      () => resolve(readGeoCacheSearch() || fallback),
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: forceFresh ? 0 : 60000,
+      }
     );
   });
+}
+
+function bindSearchMapResize() {
+  if (searchMapResizeBound) return;
+  searchMapResizeBound = true;
+  window.addEventListener("resize", () => {
+    if (kakaoMap) kakaoMap.relayout();
+  });
+}
+
+function relayoutSearchMapSoon() {
+  requestAnimationFrame(() => {
+    if (kakaoMap) kakaoMap.relayout();
+  });
+  setTimeout(() => {
+    if (kakaoMap) kakaoMap.relayout();
+  }, 250);
+}
+
+function searchInfoWindowHtml(h) {
+  const addr = h.road_address_name || h.address_name || "—";
+  const phone = h.phone || "—";
+  return (
+    `<div class="map-info-window">` +
+    `<strong>${escapeHtml(h.place_name || "")}</strong>` +
+    `<p>${escapeHtml(addr)}</p>` +
+    `<p>${escapeHtml(phone)}</p>` +
+    `</div>`
+  );
+}
+
+function hospitalDetailBodyHtml(h) {
+  const name = h.place_name || "—";
+  const addr = h.road_address_name || h.address_name || "—";
+  const phone = h.phone || "—";
+  return `
+    <dl class="hospital-detail-dl">
+      <dt>병원명</dt><dd>${escapeHtml(name)}</dd>
+      <dt>주소</dt><dd>${escapeHtml(addr)}</dd>
+      <dt>전화</dt><dd>${escapeHtml(phone)}</dd>
+    </dl>`;
+}
+
+function openHospitalDetailModal(h) {
+  document.getElementById("modal-hospital-detail-title").textContent = h.place_name || "병원 정보";
+  document.getElementById("modal-hospital-detail-body").innerHTML = hospitalDetailBodyHtml(h);
+  document.getElementById("modal-hospital-detail").classList.add("is-open");
+}
+
+function closeHospitalDetailModal() {
+  document.getElementById("modal-hospital-detail").classList.remove("is-open");
 }
 
 /* =============================================================================
@@ -618,7 +704,7 @@ async function initMapOnce() {
     return;
   }
 
-  const coords = await getUserCoordsOrDefault();
+  const coords = await getUserCoordsOrDefault({ preferSessionCache: true });
 
   try {
     await loadKakaoScript();
@@ -630,11 +716,29 @@ async function initMapOnce() {
 
     kakaoMap = new kakao.maps.Map(container, options);
     placesService = new kakao.maps.services.Places();
+    bindSearchMapResize();
 
     statusEl.textContent =
       "현 위치 주변 동물병원을 표시합니다. 검색어를 입력해 찾아보세요.";
 
     searchHospitalsKeyword("동물병원");
+    relayoutSearchMapSoon();
+
+    const locateBtn = document.getElementById("btn-search-locate");
+    if (locateBtn && !locateBtn.dataset.bound) {
+      locateBtn.dataset.bound = "1";
+      locateBtn.addEventListener("click", async () => {
+        if (!kakaoMap || !placesService) return;
+        const c = await getUserCoordsOrDefault({ forceFresh: true });
+        const ll = new kakao.maps.LatLng(c.lat, c.lng);
+        kakaoMap.setCenter(ll);
+        kakaoMap.setLevel(5);
+        const q = normalizeHospitalQuery(document.getElementById("hospital-search-input").value);
+        searchHospitalsKeyword(q || "동물병원");
+        relayoutSearchMapSoon();
+      });
+    }
+
     mapInitialized = true;
   } catch {
     showMapFallback(
@@ -665,6 +769,7 @@ function searchHospitalsKeyword(keyword) {
         status !== kakao.maps.services.Status.OK ||
         !data.length
       ) {
+        clearMarkers();
         renderHospitalList([]);
         return;
       }
@@ -687,13 +792,20 @@ function searchHospitalsKeyword(keyword) {
 
       mapped.forEach((h) => {
         const pos = new kakao.maps.LatLng(parseFloat(h.y), parseFloat(h.x));
-        bounds.extend(pos); // 모든 마커를 포함하는 영역을 계산
+        bounds.extend(pos);
         const m = new kakao.maps.Marker({ map: kakaoMap, position: pos });
         mapMarkers.push(m);
+        kakao.maps.event.addListener(m, "click", () => {
+          if (!searchInfoWindow) {
+            searchInfoWindow = new kakao.maps.InfoWindow({ removable: true });
+          }
+          searchInfoWindow.setContent(searchInfoWindowHtml(h));
+          searchInfoWindow.open(kakaoMap, m);
+        });
       });
 
-      // 모든 마커가 보이도록 지도 범위 자동 조정
       if (mapped.length) kakaoMap.setBounds(bounds);
+      relayoutSearchMapSoon();
 
       renderHospitalList(mapped);
     },
@@ -721,6 +833,10 @@ function normalizeHospitalQuery(q) {
 function clearMarkers() {
   mapMarkers.forEach((m) => m.setMap(null));
   mapMarkers = [];
+  if (searchInfoWindow) {
+    searchInfoWindow.close();
+    searchInfoWindow = null;
+  }
 }
 
 /* =============================================================================
@@ -754,7 +870,8 @@ function renderHospitalList(hospitals) {
           data-place='${encodeURIComponent(JSON.stringify(h))}'>예약하기</button>
         <button
           type="button"
-          class="btn-small btn-small--outline btn-detail">상세보기</button>
+          class="btn-small btn-small--outline btn-detail"
+          data-place='${encodeURIComponent(JSON.stringify(h))}'>상세보기</button>
       </div>
     </article>`
     )
@@ -770,9 +887,9 @@ function renderHospitalList(hospitals) {
 
   wrap.querySelectorAll(".btn-detail").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const card = btn.closest(".hospital-card");
-      const name = card.querySelector("h4").textContent;
-      alert(`${name} 상세 정보는 준비 중입니다.`);
+      const raw = btn.getAttribute("data-place");
+      if (!raw) return;
+      openHospitalDetailModal(JSON.parse(decodeURIComponent(raw)));
     });
   });
 }
@@ -886,6 +1003,12 @@ document.querySelectorAll(".chip").forEach((chip) => {
       searchHospitalsKeyword(normalizeHospitalQuery(q));
     }
   });
+});
+
+document.getElementById("modal-hospital-detail-close").addEventListener("click", closeHospitalDetailModal);
+document.getElementById("modal-hospital-detail-x").addEventListener("click", closeHospitalDetailModal);
+document.getElementById("modal-hospital-detail").addEventListener("click", (e) => {
+  if (e.target.id === "modal-hospital-detail") closeHospitalDetailModal();
 });
 
 document.getElementById("modal-book-close").addEventListener("click", closeBookModal);

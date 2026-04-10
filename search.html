@@ -133,12 +133,13 @@
                map.js의 initMapOnce()가 이 div를 target으로 카카오맵을 렌더링합니다.
                API 키가 없으면 .hidden 처리되고 아래 폴백 UI가 표시됩니다.
                위쪽 두 모서리만 둥글게 → 아래 병원 목록과 자연스럽게 연결됩니다. -->
-          <div id="map-container"></div>
-
-          <!-- ── 지도 폴백 UI ────────────────────────────────────────────
-               카카오 API 키가 없거나 로드 실패 시 격자 패턴으로 대체됩니다.
-               기본: .hidden → 폴백 상황에서만 .hidden 제거 -->
-          <div id="map-fallback" class="map-fallback hidden"></div>
+          <div class="map-wrap map-wrap--search">
+            <div id="map-container"></div>
+            <div id="map-fallback" class="map-fallback hidden"></div>
+            <button type="button" class="btn-map-locate" id="btn-search-locate" aria-label="내 위치로 이동" title="내 위치">
+              <span aria-hidden="true">◎</span>
+            </button>
+          </div>
 
           <!-- 지도 상태 메시지: "카카오맵 로드됨" 또는 "데모 모드" 등 -->
           <p id="map-status" class="mt-8"
@@ -153,6 +154,23 @@
       </main>
     </div><!-- /main-app -->
 
+
+    <div
+      class="modal-backdrop"
+      id="modal-hospital-detail"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-hospital-detail-title"
+    >
+      <div class="modal modal--detail">
+        <div class="modal__head">
+          <h3 id="modal-hospital-detail-title">병원 정보</h3>
+          <button type="button" class="modal-close" id="modal-hospital-detail-x" aria-label="닫기">×</button>
+        </div>
+        <div id="modal-hospital-detail-body" class="hospital-detail-body"></div>
+        <button type="button" class="btn-primary" id="modal-hospital-detail-close">닫기</button>
+      </div>
+    </div>
 
     <!-- ============================================================
          [모달] 예약하기 (#modal-book)

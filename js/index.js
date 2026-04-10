@@ -385,7 +385,7 @@ function renderHome() {
 
   if (upcoming.length) {
     const u = upcoming[0]; // 가장 가까운 예약
-    const badge = ddayBadge(u.datetime);
+    const daysLeft = daysUntilAppointment(u.datetime);
 
     upcomingWrap.innerHTML = `
       <div class="upcoming-card upcoming-card--clickable" role="button" tabindex="0" title="예약내역으로 이동">
@@ -394,7 +394,10 @@ function renderHome() {
           <h3>${escapeHtml(u.hospitalName)}</h3>
           <span>${formatShortDate(u.datetime)}</span>
         </div>
-        <div class="dday-badge">${badge.text}<span>${formatDdayPlus(u.datetime)}</span></div>
+        <div class="dday-badge">
+          <span class="dday-badge__label">D-Day</span>
+          <span class="dday-badge__num">${daysLeft}</span>
+        </div>
       </div>`;
     const cardEl = upcomingWrap.querySelector(".upcoming-card--clickable");
     if (cardEl) {
@@ -446,29 +449,15 @@ function renderHome() {
  * ============================================================================= */
 
 /**
- * 오늘로부터 예약일까지의 일수 차이를 반환합니다.
- * 양수: 미래 / 음수: 과거
- * @param {string} iso - ISO 날짜 문자열
- * @returns {number}
+ * 예약일(자정 기준)까지 남은 일수. 오늘이면 0, 이미 지났으면 0.
  */
-function dayDiff(iso) {
-  const d = new Date(iso);
+function daysUntilAppointment(iso) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  d.setHours(0, 0, 0, 0);
-  return Math.round((d - today) / (1000 * 60 * 60 * 24));
-}
-
-/**
- * 홈 D-day 뱃지 하단에 표시되는 "+N" / "-N" 형식의 문자열을 반환합니다.
- * 예: 3일 후 → "+3", 2일 전 → "-2"
- * @param {string} iso
- * @returns {string}
- */
-function formatDdayPlus(iso) {
-  const n = dayDiff(iso);
-  if (n >= 0) return `+${n}`;
-  return String(n);
+  const target = new Date(iso);
+  target.setHours(0, 0, 0, 0);
+  const n = Math.round((target - today) / (1000 * 60 * 60 * 24));
+  return n < 0 ? 0 : n;
 }
 
 /**
@@ -560,6 +549,30 @@ let homeMapInitialized = false;
 let homeMap = null;
 let homePlaces = null;
 let homeMarkers = [];
+let homeInfoWindow = null;
+let homeMapResizeBound = false;
+
+const TODOC_GEO_KEY = "todoc_geo_v1";
+
+function readGeoCache() {
+  try {
+    const raw = sessionStorage.getItem(TODOC_GEO_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (typeof o.lat === "number" && typeof o.lng === "number") return o;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function writeGeoCache(coords) {
+  try {
+    sessionStorage.setItem(TODOC_GEO_KEY, JSON.stringify(coords));
+  } catch {
+    /* ignore */
+  }
+}
 
 async function ensureSecretsLoaded() {
   if (typeof window === "undefined") return;
@@ -620,28 +633,117 @@ function hideHomeMapFallback() {
 function clearHomeMarkers() {
   homeMarkers.forEach((m) => m.setMap(null));
   homeMarkers = [];
+  if (homeInfoWindow) {
+    homeInfoWindow.close();
+    homeInfoWindow = null;
+  }
 }
 
 /**
- * 브라우저 위치 권한으로 현재 좌표를 얻고, 실패 시 서울 시청 기준으로 폴백합니다.
+ * 위치 좌표. 홈에서는 항상 브라우저에 요청(권한 안내). 검색 페이지는 sessionStorage 캐시를 먼저 씁니다.
  */
-function getUserCoordsOrDefault() {
+function getUserCoordsOrDefault(options = {}) {
+  const preferSessionCache = options.preferSessionCache === true;
+  const forceFresh = options.forceFresh === true;
+  if (preferSessionCache && !forceFresh) {
+    const c = readGeoCache();
+    if (c) return Promise.resolve({ lat: c.lat, lng: c.lng });
+  }
   return new Promise((resolve) => {
-    const fallback = { lat: 37.5665, lng: 126.978 };
+    const fallback = readGeoCache() || { lat: 37.5665, lng: 126.978 };
     if (!navigator.geolocation) {
       resolve(fallback);
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        resolve({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        }),
-      () => resolve(fallback),
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+      (pos) => {
+        const o = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        writeGeoCache(o);
+        resolve(o);
+      },
+      () => resolve(readGeoCache() || fallback),
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: forceFresh ? 0 : 60000,
+      }
     );
   });
+}
+
+function homeMapKakaoPlaceToHospital(p, i) {
+  return {
+    id: p.id || `kakao-${i}`,
+    place_name: p.place_name,
+    address_name: p.address_name,
+    road_address_name: p.road_address_name,
+    phone: p.phone,
+    x: p.x,
+    y: p.y,
+  };
+}
+
+function homeInfoWindowHtml(h) {
+  const addr = h.road_address_name || h.address_name || "—";
+  const phone = h.phone || "—";
+  return (
+    `<div class="map-info-window">` +
+    `<strong>${escapeHtml(h.place_name || "")}</strong>` +
+    `<p>${escapeHtml(addr)}</p>` +
+    `<p>${escapeHtml(phone)}</p>` +
+    `</div>`
+  );
+}
+
+function bindHomeMapResize() {
+  if (homeMapResizeBound) return;
+  homeMapResizeBound = true;
+  window.addEventListener("resize", () => {
+    if (homeMap) homeMap.relayout();
+  });
+}
+
+function relayoutHomeMapSoon() {
+  requestAnimationFrame(() => {
+    if (homeMap) homeMap.relayout();
+  });
+  setTimeout(() => {
+    if (homeMap) homeMap.relayout();
+  }, 250);
+}
+
+function applyHomeKeywordResults(data, st) {
+  if (st !== kakao.maps.services.Status.OK || !data.length) {
+    clearHomeMarkers();
+    return;
+  }
+  clearHomeMarkers();
+  const bounds = new kakao.maps.LatLngBounds();
+  data.slice(0, 10).forEach((p, i) => {
+    const h = homeMapKakaoPlaceToHospital(p, i);
+    const pos = new kakao.maps.LatLng(parseFloat(h.y), parseFloat(h.x));
+    bounds.extend(pos);
+    const m = new kakao.maps.Marker({ map: homeMap, position: pos });
+    homeMarkers.push(m);
+    kakao.maps.event.addListener(m, "click", () => {
+      if (!homeInfoWindow) {
+        homeInfoWindow = new kakao.maps.InfoWindow({ removable: true });
+      }
+      homeInfoWindow.setContent(homeInfoWindowHtml(h));
+      homeInfoWindow.open(homeMap, m);
+    });
+  });
+  homeMap.setBounds(bounds);
+  relayoutHomeMapSoon();
+}
+
+function runHomeHospitalSearch(latlng) {
+  if (!homePlaces || !homeMap) return;
+  homePlaces.keywordSearch(
+    "동물병원",
+    (data, st) => applyHomeKeywordResults(data, st),
+    { location: latlng, radius: 8000 }
+  );
 }
 
 async function initHomeMapOnce() {
@@ -672,25 +774,27 @@ async function initHomeMapOnce() {
     const center = new kakao.maps.LatLng(coords.lat, coords.lng);
     homeMap = new kakao.maps.Map(container, { center, level: 6 });
     homePlaces = new kakao.maps.services.Places();
+    bindHomeMapResize();
 
     if (statusEl) statusEl.textContent = "현 위치 주변 동물병원을 표시합니다.";
 
-    homePlaces.keywordSearch(
-      "동물병원",
-      (data, st) => {
-        if (st !== kakao.maps.services.Status.OK || !data.length) return;
-        clearHomeMarkers();
-        const bounds = new kakao.maps.LatLngBounds();
-        data.slice(0, 10).forEach((p) => {
-          const pos = new kakao.maps.LatLng(parseFloat(p.y), parseFloat(p.x));
-          bounds.extend(pos);
-          const m = new kakao.maps.Marker({ map: homeMap, position: pos });
-          homeMarkers.push(m);
-        });
-        homeMap.setBounds(bounds);
-      },
-      { location: center, radius: 8000 }
-    );
+    runHomeHospitalSearch(center);
+    relayoutHomeMapSoon();
+
+    const locateBtn = document.getElementById("btn-home-locate");
+    if (locateBtn && !locateBtn.dataset.bound) {
+      locateBtn.dataset.bound = "1";
+      locateBtn.addEventListener("click", async () => {
+        if (!homeMap || !homePlaces) return;
+        const c = await getUserCoordsOrDefault({ forceFresh: true });
+        const ll = new kakao.maps.LatLng(c.lat, c.lng);
+        homeMap.setCenter(ll);
+        homeMap.setLevel(5);
+        runHomeHospitalSearch(ll);
+        relayoutHomeMapSoon();
+      });
+    }
+
     homeMapInitialized = true;
   } catch {
     showHomeMapFallback("카카오맵을 불러오지 못했습니다. 도메인 등록을 확인하세요.");
