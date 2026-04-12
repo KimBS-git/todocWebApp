@@ -343,25 +343,35 @@ function getUserCoordsOrDefault(options = {}) {
   const forceFresh = options.forceFresh === true;
   if (preferSessionCache && !forceFresh) {
     const c = readGeoCacheSearch();
-    if (c) return Promise.resolve({ lat: c.lat, lng: c.lng });
+    if (c) return Promise.resolve({ lat: c.lat, lng: c.lng, _from: "cache" });
   }
+  const maxAgeMs =
+    typeof options.maximumAge === "number"
+      ? options.maximumAge
+      : forceFresh
+        ? 0
+        : 60000;
   return new Promise((resolve) => {
     const fallback = readGeoCacheSearch() || { lat: 37.5665, lng: 126.978 };
     if (!navigator.geolocation) {
-      resolve(fallback);
+      resolve({ ...fallback, _from: "no_api" });
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const o = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         writeGeoCacheSearch(o);
-        resolve(o);
+        resolve({ ...o, _from: "gps" });
       },
-      () => resolve(readGeoCacheSearch() || fallback),
+      () =>
+        resolve({
+          ...(readGeoCacheSearch() || fallback),
+          _from: "fallback",
+        }),
       {
         enableHighAccuracy: true,
-        timeout: 12000,
-        maximumAge: forceFresh ? 0 : 60000,
+        timeout: 15000,
+        maximumAge: maxAgeMs,
       },
     );
   });
@@ -491,13 +501,17 @@ async function initMapOnce() {
     statusEl.textContent =
       "지도를 불러오는 중… 위치를 확인하면 주변 병원으로 맞춥니다.";
 
-    searchHospitalsKeyword("동물병원");
+    searchHospitalsKeyword("동물병원", { localOnly: true });
     relayoutSearchMapSoon();
     [50, 200, 500].forEach((ms) => {
       setTimeout(() => kakaoMap && kakaoMap.relayout(), ms);
     });
 
-    getUserCoordsOrDefault({ preferSessionCache: true }).then((coords) => {
+    /* 페이지 진입마다 GPS 시도(세션 캐시만 쓰면 권한 켠 뒤에도 좌표가 안 바뀌는 문제 방지). maximumAge:0으로 캐시된 기기 좌표도 새로 요청 */
+    getUserCoordsOrDefault({
+      preferSessionCache: false,
+      maximumAge: 0,
+    }).then((coords) => {
       if (!kakaoMap || !placesService) return;
       const ll = new kakao.maps.LatLng(coords.lat, coords.lng);
       kakaoMap.setCenter(ll);
@@ -505,8 +519,15 @@ async function initMapOnce() {
       const q = normalizeHospitalQuery(
         document.getElementById("hospital-search-input").value,
       );
-      searchHospitalsKeyword(q || "동물병원");
+      /* setCenter 직후 getCenter()는 아직 이전 좌표일 수 있어, 검색 기준점을 ll로 고정 */
+      searchHospitalsKeyword(q || "동물병원", { localOnly: true, nearLatLng: ll });
       relayoutSearchMapSoon();
+      if (coords._from === "gps") {
+        statusEl.textContent = "";
+      } else {
+        statusEl.textContent =
+          "위치를 가져오지 못했습니다. 아래 검색으로 지역·병원명을 입력하거나, 오른쪽 버튼으로 다시 시도해 보세요.";
+      }
     });
 
     const locateBtn = document.getElementById("btn-search-locate");
@@ -521,8 +542,18 @@ async function initMapOnce() {
         const q = normalizeHospitalQuery(
           document.getElementById("hospital-search-input").value,
         );
-        searchHospitalsKeyword(q || "동물병원");
+        searchHospitalsKeyword(q || "동물병원", {
+          localOnly: true,
+          nearLatLng: ll,
+        });
         relayoutSearchMapSoon();
+        const st = document.getElementById("map-status");
+        if (st) {
+          st.textContent =
+            c._from === "gps"
+              ? ""
+              : "위치를 가져오지 못했습니다. 브라우저에서 이 사이트의 위치 권한을 확인해 주세요.";
+        }
       });
     }
 
@@ -542,70 +573,78 @@ async function initMapOnce() {
  * 카카오 Places API로 실시간 검색합니다.
  *
  * @param {string} keyword - 검색어 (예: "강남 동물병원", "24시")
+ * @param {{ localOnly?: boolean, nearLatLng?: kakao.maps.LatLng }} [opts] - localOnly일 때 nearLatLng 없으면 getCenter() 사용(막 setCenter 직후엔 구좌표일 수 있음).
  * ============================================================================= */
-function searchHospitalsKeyword(keyword) {
+function searchHospitalsKeyword(keyword, opts = {}) {
   if (!placesService || !kakaoMap) return;
 
   hospitalSearchSeq += 1;
   const seq = hospitalSearchSeq;
 
-  // 카카오 Places API 키워드 검색
-  placesService.keywordSearch(
-    keyword,
-    (data, status) => {
-      if (seq !== hospitalSearchSeq) return;
+  const localOnly = opts.localOnly === true;
+  let anchor = opts.nearLatLng;
+  if (anchor && !(anchor instanceof kakao.maps.LatLng)) {
+    anchor = new kakao.maps.LatLng(anchor.lat, anchor.lng);
+  }
+  /** HP8: 병원 — 세무회계 등 다른 업종이 키워드에 섞여 나오는 것을 줄임 */
+  const placeOpts = { category_group_code: "HP8" };
+  if (localOnly) {
+    placeOpts.location = anchor || kakaoMap.getCenter();
+    placeOpts.radius = 12000;
+  }
 
-      // 검색 실패 또는 결과 없음
-      if (
-        status === kakao.maps.services.Status.ZERO_RESULT ||
-        status !== kakao.maps.services.Status.OK ||
-        !data.length
-      ) {
-        clearMarkers();
-        renderHospitalList([]);
-        return;
-      }
+  function keywordSearchCallback(data, status) {
+    if (seq !== hospitalSearchSeq) return;
 
-      // 카카오 API 결과를 내부 데이터 형식으로 변환
-      const mapped = data.map((p, i) => ({
-        id: p.id || `kakao-${i}`,
-        place_name: p.place_name,
-        address_name: p.address_name,
-        road_address_name: p.road_address_name,
-        phone: p.phone,
-        x: p.x,
-        y: p.y,
-        tags: ["all", "open"], // 실제 태그는 API에 없어 기본값으로 설정
-      }));
-
-      // 이전 마커 제거 후 새 마커 표시
+    // 검색 실패 또는 결과 없음
+    if (
+      status === kakao.maps.services.Status.ZERO_RESULT ||
+      status !== kakao.maps.services.Status.OK ||
+      !data.length
+    ) {
       clearMarkers();
-      const bounds = new kakao.maps.LatLngBounds();
+      renderHospitalList([]);
+      return;
+    }
 
-      mapped.forEach((h) => {
-        const pos = new kakao.maps.LatLng(parseFloat(h.y), parseFloat(h.x));
-        bounds.extend(pos);
-        const m = new kakao.maps.Marker({ map: kakaoMap, position: pos });
-        mapMarkers.push(m);
-        kakao.maps.event.addListener(m, "click", () => {
-          if (!searchInfoWindow) {
-            searchInfoWindow = new kakao.maps.InfoWindow({ removable: true });
-          }
-          searchInfoWindow.setContent(searchInfoWindowHtml(h));
-          searchInfoWindow.open(kakaoMap, m);
-        });
+    // 카카오 API 결과를 내부 데이터 형식으로 변환
+    const mapped = data.map((p, i) => ({
+      id: p.id || `kakao-${i}`,
+      place_name: p.place_name,
+      address_name: p.address_name,
+      road_address_name: p.road_address_name,
+      phone: p.phone,
+      x: p.x,
+      y: p.y,
+      tags: ["all", "open"], // 실제 태그는 API에 없어 기본값으로 설정
+    }));
+
+    // 이전 마커 제거 후 새 마커 표시
+    clearMarkers();
+    const bounds = new kakao.maps.LatLngBounds();
+
+    mapped.forEach((h) => {
+      const pos = new kakao.maps.LatLng(parseFloat(h.y), parseFloat(h.x));
+      bounds.extend(pos);
+      const m = new kakao.maps.Marker({ map: kakaoMap, position: pos });
+      mapMarkers.push(m);
+      kakao.maps.event.addListener(m, "click", () => {
+        if (!searchInfoWindow) {
+          searchInfoWindow = new kakao.maps.InfoWindow({ removable: true });
+        }
+        searchInfoWindow.setContent(searchInfoWindowHtml(h));
+        searchInfoWindow.open(kakaoMap, m);
       });
+    });
 
-      if (mapped.length) kakaoMap.setBounds(bounds);
-      relayoutSearchMapSoon();
+    if (mapped.length) kakaoMap.setBounds(bounds);
+    relayoutSearchMapSoon();
 
-      renderHospitalList(mapped);
-    },
-    {
-      location: kakaoMap.getCenter(), // 지도 현재 중심점 기준 검색
-      radius: 1000, // 반경 1km 이내
-    },
-  );
+    renderHospitalList(mapped);
+  }
+
+  const kw = (keyword || "").trim() || "동물병원";
+  placesService.keywordSearch(kw, keywordSearchCallback, placeOpts);
 }
 
 /* =============================================================================
