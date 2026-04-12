@@ -229,31 +229,51 @@ let kakaoMap = null;
 let placesService = null;
 let mapMarkers = [];
 let mapInitialized = false;
+/** Places 키워드 검색이 겹칠 때(기본좌표 검색 vs GPS 이후 검색) 오래된 콜백이 지도를 덮지 않도록 함 */
+let hospitalSearchSeq = 0;
 let searchInfoWindow = null;
 let searchMapResizeBound = false;
 let searchMapLifecycleBound = false;
 let activeFilter = "all";
 
-/* 홈(index.js)과 동일 sessionStorage 키 — 페이지 이동 후에도 위치 캐시 공유 */
+/* 병원검색 페이지 위치 캐시(탭 단위). 로그인·예약 데이터는 localStorage(common.js). */
 const TODOC_GEO_SEARCH_KEY = "todoc_geo_v1";
+
+/** sessionStorage.setItem 실패 시에도 같은 탭에서 재사용 */
+let geoCoordsMemory = null;
+
+function normalizeGeoPair(o) {
+  if (!o || typeof o !== "object") return null;
+  const lat = Number(o.lat);
+  const lng = Number(o.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
 
 function readGeoCacheSearch() {
   try {
     const raw = sessionStorage.getItem(TODOC_GEO_SEARCH_KEY);
-    if (!raw) return null;
-    const o = JSON.parse(raw);
-    if (typeof o.lat === "number" && typeof o.lng === "number") return o;
+    if (raw) {
+      const n = normalizeGeoPair(JSON.parse(raw));
+      if (n) {
+        geoCoordsMemory = n;
+        return n;
+      }
+    }
   } catch {
     /* ignore */
   }
-  return null;
+  return geoCoordsMemory;
 }
 
 function writeGeoCacheSearch(coords) {
+  const n = normalizeGeoPair(coords);
+  if (!n) return;
+  geoCoordsMemory = n;
   try {
-    sessionStorage.setItem(TODOC_GEO_SEARCH_KEY, JSON.stringify(coords));
+    sessionStorage.setItem(TODOC_GEO_SEARCH_KEY, JSON.stringify(n));
   } catch {
-    /* ignore */
+    /* 사생활 보호 브라우징·스토리지 거부 등 — 메모리만 유지 */
   }
 }
 
@@ -526,10 +546,15 @@ async function initMapOnce() {
 function searchHospitalsKeyword(keyword) {
   if (!placesService || !kakaoMap) return;
 
+  hospitalSearchSeq += 1;
+  const seq = hospitalSearchSeq;
+
   // 카카오 Places API 키워드 검색
   placesService.keywordSearch(
     keyword,
     (data, status) => {
+      if (seq !== hospitalSearchSeq) return;
+
       // 검색 실패 또는 결과 없음
       if (
         status === kakao.maps.services.Status.ZERO_RESULT ||
