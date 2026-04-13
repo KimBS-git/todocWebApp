@@ -227,6 +227,7 @@ function resCardHtml(r, showDday) {
 
 let kakaoMap = null;
 let placesService = null;
+let geocoder = null;
 let mapMarkers = [];
 let mapInitialized = false;
 /** Places 키워드 검색이 겹칠 때(기본좌표 검색 vs GPS 이후 검색) 오래된 콜백이 지도를 덮지 않도록 함 */
@@ -453,6 +454,9 @@ function closeHospitalDetailModal() {
 /* 서울 시청 부근 — GPS 대기 중에도 지도·타일을 먼저 그리기 위한 기본 중심 (index.js 홈 지도와 동일) */
 const SEARCH_MAP_DEFAULT_CENTER = { lat: 37.5665, lng: 126.978 };
 
+/** 카카오 Places 키워드 검색 반경(미터). 현위치·검색창 지역 모두 동일 */
+const HOSPITAL_SEARCH_RADIUS_M = 3000;
+
 /* =============================================================================
  * [기능] 지도 초기화 (최초 1회만 실행)
  * mapInitialized 플래그로 중복 초기화를 방지합니다.
@@ -489,6 +493,9 @@ async function initMapOnce() {
 
     kakaoMap = new kakao.maps.Map(container, options);
     placesService = new kakao.maps.services.Places();
+    if (kakao.maps.services.Geocoder) {
+      geocoder = new kakao.maps.services.Geocoder();
+    }
     bindSearchMapResize();
     bindSearchMapLifecycle();
 
@@ -501,7 +508,7 @@ async function initMapOnce() {
     statusEl.textContent =
       "지도를 불러오는 중… 위치를 확인하면 주변 병원으로 맞춥니다.";
 
-    searchHospitalsKeyword("동물병원", { localOnly: true });
+    searchHospitalsKeyword("동물병원");
     relayoutSearchMapSoon();
     [50, 200, 500].forEach((ms) => {
       setTimeout(() => kakaoMap && kakaoMap.relayout(), ms);
@@ -520,7 +527,7 @@ async function initMapOnce() {
         document.getElementById("hospital-search-input").value,
       );
       /* setCenter 직후 getCenter()는 아직 이전 좌표일 수 있어, 검색 기준점을 ll로 고정 */
-      searchHospitalsKeyword(q || "동물병원", { localOnly: true, nearLatLng: ll });
+      searchHospitalsKeyword(q || "동물병원", { nearLatLng: ll });
       relayoutSearchMapSoon();
       if (coords._from === "gps") {
         statusEl.textContent = "";
@@ -542,10 +549,7 @@ async function initMapOnce() {
         const q = normalizeHospitalQuery(
           document.getElementById("hospital-search-input").value,
         );
-        searchHospitalsKeyword(q || "동물병원", {
-          localOnly: true,
-          nearLatLng: ll,
-        });
+        searchHospitalsKeyword(q || "동물병원", { nearLatLng: ll });
         relayoutSearchMapSoon();
         const st = document.getElementById("map-status");
         if (st) {
@@ -570,10 +574,12 @@ async function initMapOnce() {
 
 /* =============================================================================
  * [기능] 키워드 병원 검색
- * 카카오 Places API로 실시간 검색합니다.
+ * 카카오 Places API로 검색합니다. 항상 HP8(동물병원)이며 반경은 HOSPITAL_SEARCH_RADIUS_M.
  *
  * @param {string} keyword - 검색어 (예: "강남 동물병원", "24시")
- * @param {{ localOnly?: boolean, nearLatLng?: kakao.maps.LatLng }} [opts] - localOnly일 때 nearLatLng 없으면 getCenter() 사용(막 setCenter 직후엔 구좌표일 수 있음).
+ * @param {{ nearLatLng?: kakao.maps.LatLng, geocodeFromKeyword?: boolean }} [opts]
+ *   nearLatLng: GPS·현위치 등 명시 기준점(없으면 지도 중심 또는 주소 검색 결과).
+ *   geocodeFromKeyword: true이면 검색어에서 지역 힌트를 뽑아 주소 검색 후 그 좌표를 기준으로 함.
  * ============================================================================= */
 function searchHospitalsKeyword(keyword, opts = {}) {
   if (!placesService || !kakaoMap) return;
@@ -581,17 +587,12 @@ function searchHospitalsKeyword(keyword, opts = {}) {
   hospitalSearchSeq += 1;
   const seq = hospitalSearchSeq;
 
-  const localOnly = opts.localOnly === true;
   let anchor = opts.nearLatLng;
   if (anchor && !(anchor instanceof kakao.maps.LatLng)) {
     anchor = new kakao.maps.LatLng(anchor.lat, anchor.lng);
   }
-  /** HP8: 병원 — 세무회계 등 다른 업종이 키워드에 섞여 나오는 것을 줄임 */
-  const placeOpts = { category_group_code: "HP8" };
-  if (localOnly) {
-    placeOpts.location = anchor || kakaoMap.getCenter();
-    placeOpts.radius = 12000;
-  }
+
+  const kw = (keyword || "").trim() || "동물병원";
 
   function keywordSearchCallback(data, status) {
     if (seq !== hospitalSearchSeq) return;
@@ -643,8 +644,55 @@ function searchHospitalsKeyword(keyword, opts = {}) {
     renderHospitalList(mapped);
   }
 
-  const kw = (keyword || "").trim() || "동물병원";
-  placesService.keywordSearch(kw, keywordSearchCallback, placeOpts);
+  function runKeywordWithAnchor(anchorLatLng) {
+    if (seq !== hospitalSearchSeq) return;
+    const loc = anchorLatLng || kakaoMap.getCenter();
+    /** HP8: 병원 — 세무회계 등 다른 업종이 키워드에 섞여 나오는 것을 줄임 */
+    const placeOpts = {
+      category_group_code: "HP8",
+      location: loc,
+      radius: HOSPITAL_SEARCH_RADIUS_M,
+    };
+    placesService.keywordSearch(kw, keywordSearchCallback, placeOpts);
+  }
+
+  if (anchor) {
+    runKeywordWithAnchor(anchor);
+    return;
+  }
+
+  if (opts.geocodeFromKeyword === true && geocoder) {
+    const hint = regionHintFromHospitalKeyword(kw);
+    if (hint) {
+      geocoder.addressSearch(hint, (results, status) => {
+        if (seq !== hospitalSearchSeq) return;
+        if (
+          status === kakao.maps.services.Status.OK &&
+          results &&
+          results[0]
+        ) {
+          const r = results[0];
+          const ll = new kakao.maps.LatLng(parseFloat(r.y), parseFloat(r.x));
+          kakaoMap.setCenter(ll);
+          kakaoMap.setLevel(5);
+          runKeywordWithAnchor(ll);
+        } else {
+          runKeywordWithAnchor(kakaoMap.getCenter());
+        }
+      });
+      return;
+    }
+  }
+
+  runKeywordWithAnchor(kakaoMap.getCenter());
+}
+
+/** "강남 동물병원" → "강남" 등 주소 검색용 힌트 (동물병원만이면 null) */
+function regionHintFromHospitalKeyword(kw) {
+  const s = (kw || "").trim();
+  if (!s || s === "동물병원") return null;
+  const hint = s.replace(/\s+동물병원\s*$/u, "").trim();
+  return hint || null;
 }
 
 /* =============================================================================
@@ -813,7 +861,9 @@ const searchInput = document.getElementById("hospital-search-input");
 searchInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
-    searchHospitalsKeyword(normalizeHospitalQuery(e.target.value));
+    searchHospitalsKeyword(normalizeHospitalQuery(e.target.value), {
+      geocodeFromKeyword: true,
+    });
   }
 });
 
@@ -821,7 +871,9 @@ searchInput.addEventListener(
   "input",
   debounce((e) => {
     if (e.target.value.trim().length >= 2) {
-      searchHospitalsKeyword(normalizeHospitalQuery(e.target.value));
+      searchHospitalsKeyword(normalizeHospitalQuery(e.target.value), {
+        geocodeFromKeyword: true,
+      });
     }
   }, 400),
 );
@@ -836,7 +888,9 @@ document.querySelectorAll(".chip").forEach((chip) => {
 
     const q = searchInput.value.trim();
     if (hasKakaoKey() && placesService) {
-      searchHospitalsKeyword(normalizeHospitalQuery(q));
+      searchHospitalsKeyword(normalizeHospitalQuery(q), {
+        geocodeFromKeyword: true,
+      });
     }
   });
 });
